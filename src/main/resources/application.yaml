@@ -1,0 +1,30 @@
+# 公共配置: 所有非敏感内容都放这里
+# 敏感信息(数据源连接)只在 application-dev.yaml / application-prod.yaml 中
+spring:
+  application:
+    name: hangyun
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl   # 打印 SQL
+  global-config:
+    db-config:
+      id-type: auto          # 全局默认自增; 非自增表在实体上用 @TableId(type = ASSIGN_ID) 单独覆盖
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+# 固定 8080, 不做环境变量覆盖
+server:
+  port: 8080
+
+logging:
+  level:
+    com.test.hangyun: debug

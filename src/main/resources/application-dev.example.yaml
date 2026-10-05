@@ -1,0 +1,18 @@
+# =====================================================================
+#  开发环境配置【模板】
+#
+#  使用方法:
+#    1. 复制本文件为同目录下的 application-dev.yaml
+#          cp application-dev.example.yaml application-dev.yaml
+#    2. 把下面的占位内容换成你自己的数据库连接信息
+#
+#  注意: application-dev.yaml 已被 .gitignore 排除, 不会被提交,
+#        所以每个人本地填的密码都只在自己机器上, 不会进仓库。
+# =====================================================================
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/你的数据库名
+    username: 你的用户名
+    password: 你的密码
+    driver-class-name: org.postgresql.Driver
