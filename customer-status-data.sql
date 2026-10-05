@@ -7,6 +7,8 @@
 --  写入三条客户状态, id 显式指定为 1 / 2 / 3, 与 Customer_Status 的列注释
 --  "1正常, 2异常, 3注销" 以及后续业务里 customer.status_id 的取值保持一致。
 --
+--  客户表的样本数据在 customer-data.sql (依赖本脚本写入的 1/2/3)。
+--
 --  编写约定:
 --    1. insert_time / update_time 不写值, 留 null 交给 set_time_fields() 触发器
 --       填北京时间, 与后端 CustomerStatusServiceImpl.create() 的行为一致。

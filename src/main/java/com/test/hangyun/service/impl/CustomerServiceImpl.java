@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.CustomerStatusConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerCreateReq;
 import com.test.hangyun.dto.CustomerQueryReq;
@@ -42,11 +43,32 @@ public class CustomerServiceImpl implements CustomerService {
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
         LambdaQueryWrapper<CustomerView> w = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(req.getKeyword())) {
-            String kw = req.getKeyword().trim();
-            w.and(q -> q.like(CustomerView::getName, kw).or().like(CustomerView::getPhone, kw));
+
+        // 前缀匹配, 不用 like('%%'): Customer 上的 name / qualification 是 btree 索引,
+        // 只有"从头匹配"(name LIKE 'x%')才可能走索引, 两边都带 % 只能全表扫描。
+        if (StringUtils.hasText(req.getName())) {
+            w.likeRight(CustomerView::getName, req.getName().trim());
         }
-        w.eq(req.getStatus() != null, CustomerView::getStatus, req.getStatus());
+        if (StringUtils.hasText(req.getQualification())) {
+            w.likeRight(CustomerView::getQualification, req.getQualification().trim());
+        }
+
+        // 资质有效期区间, 两端都是闭区间(>= from, <= to), 单边不传就只限一边
+        w.ge(req.getQualificationValidToFrom() != null,
+                CustomerView::getQualificationValidTo, req.getQualificationValidToFrom());
+        w.le(req.getQualificationValidToTo() != null,
+                CustomerView::getQualificationValidTo, req.getQualificationValidToTo());
+
+        // 逻辑删除: 已注销的客户默认不出现在列表里, 只有前端显式按 status=3 筛选时才列出来。
+        // status_id 允许为 null, 而 "status <> 3" 对 null 求值为 null(视为不成立),
+        // 会连"没有状态"的客户一起漏掉, 所以必须额外放行 null。
+        if (req.getStatus() != null) {
+            w.eq(CustomerView::getStatus, req.getStatus());
+        } else {
+            w.and(q -> q.ne(CustomerView::getStatus, CustomerStatusConstants.STATUS_CANCELLED)
+                    .or().isNull(CustomerView::getStatus));
+        }
+        // 最新录入的排在最前面
         w.orderByDesc(CustomerView::getId);
 
         Page<CustomerView> p = customerViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
@@ -110,12 +132,14 @@ public class CustomerServiceImpl implements CustomerService {
         if (customerViewMapper.selectById(id) == null) {
             throw BizException.notFound("客户不存在");
         }
-        // 删除保护: 库里没有外键约束, 必须自己挡住被引用的记录
-        long orders = customerMapper.countOrdersByCustomerId(id);
-        if (orders > 0) {
-            throw BizException.conflict("该客户下存在 " + orders + " 个订单, 无法删除");
-        }
-        customerMapper.deleteById(id);
+
+        // 逻辑删除: 不删行, 只把状态改成"注销"。
+        // 好处是订单等引用不会悬空, 所以这里不需要再做引用检查。
+        // 已经是注销状态时重复调用也安全: 整行没有实际变化, 触发器不会刷新 update_time。
+        LambdaUpdateWrapper<Customer> u = new LambdaUpdateWrapper<>();
+        u.eq(Customer::getId, id)
+                .set(Customer::getStatusId, CustomerStatusConstants.STATUS_CANCELLED);
+        customerMapper.update(null, u);
     }
 
     private void validateStatusExists(Long statusId) {

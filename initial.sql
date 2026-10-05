@@ -611,6 +611,16 @@ comment on column Log.update_time     is '更新时间';
 
 create index idx_customer_status_id              on Customer (status_id);
 
+-- name / qualification 是前缀匹配(name LIKE 'x%')。默认排序规则下, 普通 btree 索引
+-- 撑不起 LIKE, 必须指定 varchar_pattern_ops 才会被查询用到。
+create index idx_customer_name                   on Customer (name varchar_pattern_ops);
+create index idx_customer_qualification          on Customer (qualification varchar_pattern_ops);
+
+
+
+-- 资质有效期是区间查询(>= / <=), 普通 btree 即可
+create index idx_customer_qualification_valid_to on Customer (qualification_valid_to);
+
 create index idx_orders_customer_id              on Orders (customer_id);
 create index idx_orders_loading_port_id          on Orders (loading_port_id);
 create index idx_orders_discharge_port_id        on Orders (discharge_port_id);
