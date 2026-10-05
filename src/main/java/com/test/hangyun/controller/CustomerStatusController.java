@@ -61,7 +61,7 @@ public class CustomerStatusController {
         return Result.success();
     }
 
-    @Operation(summary = "删除客户状态(有客户引用时拒绝)")
+    @Operation(summary = "删除客户状态(内置状态或被客户引用时拒绝)")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         customerStatusService.delete(id);

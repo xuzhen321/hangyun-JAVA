@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerCreateReq;
 import com.test.hangyun.dto.CustomerQueryReq;
 import com.test.hangyun.dto.CustomerUpdateReq;
@@ -31,18 +32,14 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
 
-    private static final long DEFAULT_SIZE = 20;
-    private static final long MAX_SIZE = 100;
-
     private final CustomerMapper customerMapper;
     private final CustomerViewMapper customerViewMapper;
     private final CustomerStatusMapper customerStatusMapper;
 
     @Override
     public PageResult<CustomerVO> page(CustomerQueryReq req) {
-        long pageNo = (req.getPage() == null || req.getPage() < 1) ? 1 : req.getPage();
-        long pageSize = (req.getSize() == null || req.getSize() < 1)
-                ? DEFAULT_SIZE : Math.min(req.getSize(), MAX_SIZE);
+        long pageNo = PageConstants.normalizePage(req.getPage());
+        long pageSize = PageConstants.normalizeSize(req.getSize());
 
         LambdaQueryWrapper<CustomerView> w = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(req.getKeyword())) {

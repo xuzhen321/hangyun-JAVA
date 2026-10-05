@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.CustomerStatusConstants;
+import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerStatusQueryReq;
 import com.test.hangyun.dto.CustomerStatusReq;
 import com.test.hangyun.dto.vo.CustomerStatusVO;
@@ -14,7 +16,6 @@ import com.test.hangyun.service.CustomerStatusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -29,21 +30,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CustomerStatusServiceImpl implements CustomerStatusService {
 
-    private static final long DEFAULT_SIZE = 20;
-    private static final long MAX_SIZE = 100;
-
     private final CustomerStatusMapper customerStatusMapper;
 
     @Override
     public PageResult<CustomerStatusVO> page(CustomerStatusQueryReq req) {
-        long pageNo = (req.getPage() == null || req.getPage() < 1) ? 1 : req.getPage();
-        long pageSize = (req.getSize() == null || req.getSize() < 1)
-                ? DEFAULT_SIZE : Math.min(req.getSize(), MAX_SIZE);
+        long pageNo = PageConstants.normalizePage(req.getPage());
+        long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        // 字典表只做分页, 不带任何筛选条件
         LambdaQueryWrapper<CustomerStatus> w = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(req.getKeyword())) {
-            w.like(CustomerStatus::getDescription, req.getKeyword().trim());
-        }
         w.orderByAsc(CustomerStatus::getId);
 
         Page<CustomerStatus> p = customerStatusMapper.selectPage(new Page<>(pageNo, pageSize), w);
@@ -70,6 +65,12 @@ public class CustomerStatusServiceImpl implements CustomerStatusService {
     @Override
     @Transactional
     public void update(Long id, CustomerStatusReq req) {
+        // 内置状态(1正常/2异常/3注销)是系统基础数据, 一律不允许修改。
+        // 这一条与库里存不存在无关, 所以放在存在性校验之前先挡掉。
+        if (CustomerStatusConstants.isBuiltin(id)) {
+            throw BizException.conflict("系统内置状态(正常/异常/注销)不允许修改");
+        }
+
         getExisting(id);
         String description = req.getDescription().trim();
         // 查重时排除自己, 否则"只改其他字段、描述不变"的提交会被误判为重复
@@ -84,6 +85,12 @@ public class CustomerStatusServiceImpl implements CustomerStatusService {
     @Override
     @Transactional
     public void delete(Long id) {
+        // 内置状态(1正常/2异常/3注销)是系统基础数据, 一律不允许删除。
+        // 这一条与库里存不存在无关, 所以放在存在性校验之前先挡掉。
+        if (CustomerStatusConstants.isBuiltin(id)) {
+            throw BizException.conflict("系统内置状态(正常/异常/注销)不允许删除");
+        }
+
         getExisting(id);
 
         // 删除保护: 库里没有外键约束, 必须自己挡住仍被客户引用的状态
