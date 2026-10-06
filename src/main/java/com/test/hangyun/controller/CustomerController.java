@@ -2,6 +2,7 @@ package com.test.hangyun.controller;
 
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.Result;
+import com.test.hangyun.dto.CustomerBatchDeleteReq;
 import com.test.hangyun.dto.CustomerCreateReq;
 import com.test.hangyun.dto.CustomerQueryReq;
 import com.test.hangyun.dto.CustomerUpdateReq;
@@ -54,7 +55,14 @@ public class CustomerController {
         return Result.success();
     }
 
-    @Operation(summary = "删除客户")
+    @Operation(summary = "批量删除客户(逻辑删除, 不存在的 id 忽略)")
+    @DeleteMapping("/batch")
+    public Result<Void> deleteBatch(@Valid @RequestBody CustomerBatchDeleteReq req) {
+        customerService.deleteBatch(req.getIds());
+        return Result.success();
+    }
+
+    @Operation(summary = "删除客户(逻辑删除, 状态改为注销)")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         customerService.delete(id);

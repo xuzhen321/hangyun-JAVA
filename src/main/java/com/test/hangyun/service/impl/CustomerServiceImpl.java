@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
+
 /**
  * 客户管理。
  * <p>
@@ -123,6 +125,25 @@ public class CustomerServiceImpl implements CustomerService {
                 .set(Customer::getQualification, req.getQualification())
                 .set(Customer::getQualificationValidTo, req.getQualificationValidTo())
                 .set(Customer::getStatusId, req.getStatusId());
+        customerMapper.update(null, u);
+    }
+
+    @Override
+    @Transactional
+    public void deleteBatch(List<Long> ids) {
+        // 去重: 前端多选时可能因为交互传进重复的 id, 去重后 IN 里少几个参数
+        List<Long> distinctIds = ids.stream().distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return;
+        }
+
+        // 逻辑删除, 一条 UPDATE 覆盖整批。
+        // 语义是宽松的: 库里不存在的 id 不会被匹配到, 自然被忽略 —— 这正是幂等的来源,
+        // 重复提交同一批 id 或混进已注销的客户都不会报错。
+        // 整行没有实际变化的记录(本来就是注销态), 触发器也不会刷新 update_time。
+        LambdaUpdateWrapper<Customer> u = new LambdaUpdateWrapper<>();
+        u.in(Customer::getId, distinctIds)
+                .set(Customer::getStatusId, CustomerStatusConstants.STATUS_CANCELLED);
         customerMapper.update(null, u);
     }
 
