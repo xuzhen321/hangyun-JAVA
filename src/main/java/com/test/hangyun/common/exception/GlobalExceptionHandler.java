@@ -17,10 +17,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /** 业务异常: 用它自带的状态码 */
+    /**
+     * 业务异常: 用它自带的状态码。
+     * <p>
+     * 注意 detail(比如具体的 id)只写进日志, 响应体里只放 msg ——
+     * 内部 id 是排查用的实现细节, 不该暴露给调用方。
+     */
     @ExceptionHandler(BizException.class)
     public ResponseEntity<Result<Void>> handleBiz(BizException e) {
-        log.warn("业务异常: {}", e.getMessage());
+        log.warn("业务异常: {}{}", e.getMessage(),
+                e.getDetail() == null ? "" : " [" + e.getDetail() + "]");
         return ResponseEntity.status(e.getStatus()).body(Result.error(e.getMessage()));
     }
 

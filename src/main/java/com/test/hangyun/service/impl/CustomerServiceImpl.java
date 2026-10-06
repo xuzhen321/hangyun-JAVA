@@ -6,10 +6,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.CustomerStatusConstants;
+import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerCreateReq;
 import com.test.hangyun.dto.CustomerQueryReq;
 import com.test.hangyun.dto.CustomerUpdateReq;
+import com.test.hangyun.dto.vo.CustomerOptionVO;
 import com.test.hangyun.dto.vo.CustomerVO;
 import com.test.hangyun.mapper.CustomerMapper;
 import com.test.hangyun.mapper.CustomerStatusMapper;
@@ -163,12 +165,32 @@ public class CustomerServiceImpl implements CustomerService {
         customerMapper.update(null, u);
     }
 
+    @Override
+    public List<CustomerOptionVO> options(String name) {
+        // 下拉框只要本表字段(name/phone), 不需要联表, 所以读基表 customer 而不是视图 v_customer
+        LambdaQueryWrapper<Customer> w = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(name)) {
+            w.likeRight(Customer::getName, name.trim());
+        }
+        // 与列表口径一致: 已注销的客户不做候选。
+        // status_id 允许为 null, "status_id <> 3" 对 null 求值为 null, 会连没有状态的客户一起漏掉。
+        w.and(q -> q.ne(Customer::getStatusId, CustomerStatusConstants.STATUS_CANCELLED)
+                .or().isNull(Customer::getStatusId));
+        w.orderByAsc(Customer::getName);
+
+        // 第三个参数 searchCount=false: 下拉框不需要 total, 省掉那条 COUNT
+        return customerMapper.selectPage(
+                        new Page<>(1, OptionConstants.OPTION_LIMIT, false), w)
+                .getRecords().stream().map(CustomerOptionVO::from).toList();
+    }
+
     private void validateStatusExists(Long statusId) {
         if (statusId == null) {
             return;
         }
         if (customerStatusMapper.selectById(statusId) == null) {
-            throw new BizException("客户状态不存在: " + statusId);
+            // 文案里不带 id, 那是内部实现细节; 具体值走 detail 只进日志
+            throw new BizException("客户状态不存在", "statusId=" + statusId);
         }
     }
 }

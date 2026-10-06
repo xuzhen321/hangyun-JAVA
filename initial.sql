@@ -662,6 +662,13 @@ create index idx_port_level_id                   on Port (level_id);
 create index idx_port_port_type_id               on Port (port_type_id);
 create index idx_port_parent_port_id             on Port (parent_port_id);
 
+-- 下面两个不是外键索引, 是给港口下拉框的前缀搜索用的(/ports/options 按中英文名前缀匹配)。
+-- 和 Customer.name / qualification 同理: 默认排序规则下普通 btree 撑不起 LIKE,
+-- 必须指定 varchar_pattern_ops 才会被查询用到。
+-- unlocode 不重复建: 它已经有 unique 约束自带的索引, 等值查询够用。
+create index idx_port_enname_pattern             on Port (enname varchar_pattern_ops);
+create index idx_port_cnname_pattern             on Port (cnname varchar_pattern_ops);
+
 create index idx_log_user_id                     on Log (user_id);
 create index idx_log_type_id                     on Log (type_id);
 

@@ -3,8 +3,9 @@ package com.test.hangyun.constant;
 /**
  * 客户状态的基础数据约定。
  * <p>
- * id 1/2/3 是系统初始化时写入的三条基础状态(见 customer-status-data.sql), 语义固定, 业务上不允许删除 ——
- * 客户表的 status_id 会引用它们, 删掉会让已存在的客户失去状态。
+ * id 1/2/3 是系统初始化时写入的三条基础状态(见 customer-status-data.sql), 语义固定,
+ * 业务上既**不允许删除**也**不允许修改** —— 客户表的 status_id 会引用它们, 删掉会让已存在的
+ * 客户失去状态; 改描述则会让 id 与含义脱钩, 而业务代码是按 id 判断的。
  * <p>
  * 其中 3(注销)还被"客户逻辑删除"复用: 客户列表的删除操作只是把 status_id 改成 3,
  * 不真的删行, 详见 {@code CustomerServiceImpl#delete}。
