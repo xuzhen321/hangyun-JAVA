@@ -629,6 +629,10 @@ create index idx_orders_status_id                on Orders (status_id);
 create index idx_cargo_cargo_type_id             on Cargo (cargo_type_id);
 create index idx_cargo_order_id                  on Cargo (order_id);
 
+-- 货物种类列表按名称前缀搜索(/cargo-types?name=)。和 Customer.name / Port.cnname 同理:
+-- 默认排序规则下普通 btree 撑不起 LIKE, 必须指定 varchar_pattern_ops 才会被查询用到。
+create index idx_cargo_type_name_pattern         on Cargo_Type (name varchar_pattern_ops);
+
 create index idx_cargo_container_result_cargo_id     on Cargo_Container_Result (cargo_id);
 create index idx_cargo_container_result_container_no on Cargo_Container_Result (container_no);
 

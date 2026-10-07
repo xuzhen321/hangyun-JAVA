@@ -1,6 +1,6 @@
 # SQL 必看
 
-> 拿到代码后，**按顺序把下面 4 个文件跑一遍**，后端就能用了。后面 3 个是测试数据，可选——但不装的话，列表页和下拉框都是空的，没法联调。
+> 拿到代码后，**按顺序把下面 4 个文件跑一遍**，后端就能用了。后面 4 个是测试数据，可选——但不装的话，列表页和下拉框都是空的，没法联调。
 
 ---
 
@@ -13,18 +13,20 @@
 | 3 | `customer-status-data.sql` | 写入客户状态 **1 正常 / 2 异常 / 3 注销** | 客户状态下拉框是空的；客户删除（逻辑删除）会把状态指向不存在的 id |
 | 4 | `order-status-data.sql` | 写入订单状态 **1 已确认 / 2 执行中 / 3 已完成 / 4 已取消** | 订单状态下拉框是空的；订单删除（逻辑删除）同上 |
 
-## 二、可选的 3 个
+## 二、可选的 4 个
 
 | 文件 | 作用 | 依赖 |
 |---|---|---|
 | `customer-data.sql` | 10 条客户样本数据 | 第 3 步（状态 1/2/3） |
 | `port-data.sql` | 10 条港口模拟数据（含 UN/LOCODE 和中英文名） | 第 1 步 |
+| `cargo-type-data.sql` | 12 条货物种类样本数据 | 第 1 步 |
 | `order-data.sql` | 12 条订单样本数据 | **上面的客户 + 港口，以及第 4 步的状态** |
 
-三个都是**纯测试数据，不装不影响功能**，但装了才能端到端联调：
+四个都是**纯测试数据，不装不影响功能**，但装了才能端到端联调：
 
 - 不装 `customer-data.sql` → 客户列表是空的，没法选客户下单
 - 不装 `port-data.sql` → `GET /ports/options` 返回 `[]`，起运港/目的港选不了
+- 不装 `cargo-type-data.sql` → 货物种类列表是空的，名称搜索没东西可试
 - 不装 `order-data.sql` → 订单列表是空的，`GET /customers/{id}/orders` 也查不到东西
 
 ---
@@ -43,9 +45,12 @@
         ↓
 5. customer-data.sql        客户样本（可选，引用第 3 步的 1/2/3）
 6. port-data.sql            港口样本（可选，只依赖第 1 步）
+7. cargo-type-data.sql      货物种类样本（可选, 只依赖第 1 步）
         ↓
-7. order-data.sql           订单样本（可选，依赖第 4/5/6 步）
+8. order-data.sql           订单样本（可选，依赖第 4/5/6 步）
 ```
+
+第 6、7 步只依赖第 1 步，放在第 5 步前后都行。
 
 ⚠️ **顺序错了不会报错，但会静默出脏数据** —— 库里没有物理外键：
 
@@ -65,6 +70,7 @@ psql -h localhost -p 5432 -U postgres -d demo -f customer-status-data.sql
 psql -h localhost -p 5432 -U postgres -d demo -f order-status-data.sql
 psql -h localhost -p 5432 -U postgres -d demo -f customer-data.sql   # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f port-data.sql       # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f cargo-type-data.sql # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f order-data.sql      # 可选
 ```
 
@@ -83,19 +89,26 @@ psql -h localhost -p 5432 -U postgres -d demo -f order-data.sql      # 可选
 | `order-status-data.sql` | ✅ 可以 | 同上 |
 | `customer-data.sql` | ✅ 可以 | 同上 |
 | `port-data.sql` | ✅ 可以 | 同上 |
+| `cargo-type-data.sql` | ✅ 可以 | 同上 |
 | `order-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `orders.id` 是 varchar 主键，没有自增序列 |
 
 如果 `initial.sql` 跑到一半失败了，需要先把已建的表删掉再重跑，或者直接删库重建。
 
 ## 六、已经建过库了？索引的增量变更
 
-`initial.sql` 只能跑一次（见上一节），所以**如果你的库是在下面这两次改动之前建的**，索引不会自己补上，要手动执行。
+`initial.sql` 只能跑一次（见上一节），所以**如果你的库是在下面这几处改动之前建的**，索引不会自己补上，要手动执行。
 
 ### 港口的中英文名前缀索引（给 `/ports/options` 用）
 
 ```sql
 create index idx_port_enname_pattern on Port (enname varchar_pattern_ops);
 create index idx_port_cnname_pattern on Port (cnname varchar_pattern_ops);
+```
+
+### 货物种类的名称前缀索引（给 `/cargo-types` 的 name 搜索用）
+
+```sql
+create index idx_cargo_type_name_pattern on Cargo_Type (name varchar_pattern_ops);
 ```
 
 ### 客户的姓名 / 资质前缀索引（给 `/customers` 的 name、qualification 搜索用）
@@ -107,7 +120,12 @@ create index idx_customer_name          on Customer (name varchar_pattern_ops);
 create index idx_customer_qualification on Customer (qualification varchar_pattern_ops);
 ```
 
-⚠️ 两处的处理方式不同：**客户的这两个是"重建"**（原来的索引存在，但用的是默认 operator class，`LIKE 'x%'` 用不上，必须先 drop）；**港口的两个是新加**，直接 create 就行。
+⚠️ 处理方式不同，别搞混：
+
+| | 做法 |
+|---|---|
+| **客户**的 name / qualification | **重建** —— 原来的索引存在，但用的是默认 operator class，`LIKE 'x%'` 用不上，必须先 `drop` |
+| **港口**的 enname / cnname、**货物种类**的 name | **新加** —— 直接 `create index` 即可 |
 
 不补也不会报错，只是前缀搜索会退化成顺序扫描——数据量小的话感觉不出来。
 
@@ -115,8 +133,11 @@ create index idx_customer_qualification on Customer (qualification varchar_patte
 
 ```sql
 select indexname from pg_indexes
-where tablename in ('customer', 'port') and indexname like '%pattern%';
--- 期望 4 行: idx_customer_name / idx_customer_qualification / idx_port_enname_pattern / idx_port_cnname_pattern
+where tablename in ('customer', 'port', 'cargo_type') and indexname like '%pattern%';
+-- 期望 5 行:
+--   idx_customer_name / idx_customer_qualification
+--   idx_port_enname_pattern / idx_port_cnname_pattern
+--   idx_cargo_type_name_pattern
 ```
 
 ## 七、装完怎么确认
@@ -145,6 +166,9 @@ select count(*) from port;
 
 -- 装了 order-data.sql 的话应该是 12
 select count(*) from orders;
+
+-- 装了 cargo-type-data.sql 的话应该是 12
+select count(*) from cargo_type;
 ```
 
 再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 4 步都到位了。
