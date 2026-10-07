@@ -5,6 +5,7 @@ import com.test.hangyun.common.Result;
 import com.test.hangyun.dto.CargoTypeBatchDeleteReq;
 import com.test.hangyun.dto.CargoTypeQueryReq;
 import com.test.hangyun.dto.CargoTypeReq;
+import com.test.hangyun.dto.vo.CargoTypeOptionVO;
 import com.test.hangyun.dto.vo.CargoTypeVO;
 import com.test.hangyun.service.CargoTypeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,7 +19,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "货物种类", description = "货物种类信息的增删改查")
 @RestController
@@ -32,6 +36,13 @@ public class CargoTypeController {
     @GetMapping
     public Result<PageResult<CargoTypeVO>> page(CargoTypeQueryReq req) {
         return Result.success(cargoTypeService.page(req));
+    }
+
+    @Operation(summary = "货物种类下拉框(只返回 id/名称, 一次性全部返回)")
+    @GetMapping("/options")
+    public Result<List<CargoTypeOptionVO>> options(
+            @RequestParam(required = false) String name) {
+        return Result.success(cargoTypeService.options(name));
     }
 
     @Operation(summary = "查询货物种类详情")

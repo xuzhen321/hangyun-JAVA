@@ -8,6 +8,7 @@ import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CargoTypeQueryReq;
 import com.test.hangyun.dto.CargoTypeReq;
+import com.test.hangyun.dto.vo.CargoTypeOptionVO;
 import com.test.hangyun.dto.vo.CargoTypeVO;
 import com.test.hangyun.mapper.CargoTypeMapper;
 import com.test.hangyun.pojo.entity.CargoType;
@@ -52,6 +53,21 @@ public class CargoTypeServiceImpl implements CargoTypeService {
     @Override
     public CargoTypeVO getById(Long id) {
         return CargoTypeVO.from(getExisting(id));
+    }
+
+    @Override
+    public List<CargoTypeOptionVO> options(String name) {
+        // 和 /customers/options、/ports/options 不同, 这里**不设条数上限**:
+        // 货物种类是字典表, 条数少, 下拉框是一次性加载让人挑的, 截断到 20 条反而会把
+        // 后面的种类藏起来、搜都搜不到。将来种类多到影响响应了再改成远程搜索。
+        LambdaQueryWrapper<CargoType> w = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(name)) {
+            w.likeRight(CargoType::getName, name.trim());
+        }
+        w.orderByAsc(CargoType::getId);
+        return cargoTypeMapper.selectList(w).stream()
+                .map(CargoTypeOptionVO::from)
+                .toList();
     }
 
     @Override

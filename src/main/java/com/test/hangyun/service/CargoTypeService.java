@@ -3,6 +3,7 @@ package com.test.hangyun.service;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.dto.CargoTypeQueryReq;
 import com.test.hangyun.dto.CargoTypeReq;
+import com.test.hangyun.dto.vo.CargoTypeOptionVO;
 import com.test.hangyun.dto.vo.CargoTypeVO;
 
 import java.util.List;
@@ -14,6 +15,12 @@ public interface CargoTypeService {
 
     /** 详情 */
     CargoTypeVO getById(Long id);
+
+    /**
+     * 下拉框候选: 只返回 id + name, **一次性返回全部**(货物种类是字典表, 条数少)。
+     * name 传了就按前缀筛。
+     */
+    List<CargoTypeOptionVO> options(String name);
 
     /** 新增 */
     void create(CargoTypeReq req);
