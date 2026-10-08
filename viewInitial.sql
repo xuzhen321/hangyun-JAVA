@@ -26,6 +26,17 @@
 
 begin;
 
+-- ⚠️ 先 drop 再建, **不能只用 create or replace**。
+--
+--    PostgreSQL 的 create or replace view 是**按列的位置**匹配新旧视图的, 不是按列名。
+--    所以在中间插一列会被当成"给原来那个位置的列改名", 直接报错:
+--        [42P16] 不能将视图列的名称从"flag_state"改成"vessel_type_id"
+--    (v_vessel 补的 4 个 id 列、v_port 补的 6 个 id 列, 都是插在中间的, 必然触发。)
+--
+--    这 7 个视图互相之间没有依赖(都是直接连基表), 所以 drop 不需要 cascade。
+--    下面的 create or replace 保留原样即可 —— 前面已经 drop 过, replace 不会有害。
+drop view if exists v_customer, v_order, v_container_event, v_vessel, v_port, v_user, v_operation_log;
+
 -- =====================================================================
 -- 1. 客户管理
 -- =====================================================================
@@ -114,6 +125,12 @@ select
     v.name         as shipname,
     v.imo          as imo,
     v.callsign     as callsign,
+    -- 下面四个 id 是后补的: 光有名称的话, 前端编辑表单没法回填下拉框,
+    -- 也没法按船旗国/船型筛选(视图里没有这两列就过滤不了)。
+    v.vessel_type_id    as vessel_type_id,
+    v.country_id        as country_id,
+    v.owner_company_id  as owner_company_id,
+    v.manager_company_id as manager_company_id,
     co.country_cnname  as flag_state,
     st.type        as shiptype,
     st."GT"        as "GT",
@@ -149,6 +166,14 @@ select
     p.longitude                  as longitude,
     p.geom                       as geom,
     p.province                   as province,
+    -- 下面六组 id 是后补的: 光有名称的话, 前端编辑表单没法回填下拉框,
+    -- 也没法按国家/区域/时区/尺寸/级别/类型筛选。
+    p.country_id                 as country_id,
+    p.area_id                    as area_id,
+    p.timezone_id                as timezone_id,
+    p.harbor_size_id             as harbor_size_id,
+    p.level_id                   as level_id,
+    p.port_type_id               as port_type_id,
     co.country_code              as country_code,
     co.country_enname            as country_enname,
     co.country_cnname            as country_cnname,

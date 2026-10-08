@@ -10,8 +10,10 @@ import com.test.hangyun.dto.VoyageQueryReq;
 import com.test.hangyun.dto.VoyageReq;
 import com.test.hangyun.dto.vo.VoyageVO;
 import com.test.hangyun.mapper.PortMapper;
+import com.test.hangyun.mapper.VesselMapper;
 import com.test.hangyun.mapper.VoyageMapper;
 import com.test.hangyun.pojo.entity.Port;
+import com.test.hangyun.pojo.entity.Vessel;
 import com.test.hangyun.pojo.entity.Voyage;
 import com.test.hangyun.service.VoyageService;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +30,14 @@ import java.util.function.Function;
 /**
  * 航次管理。
  * <p>
- * 库里**没有** v_voyage 视图, 所以直接读基础表。出参里的两个港口中文名在 port 表上,
- * 由 Service 把当前页用到的港口 id 收集起来**批量**查一次回填。
+ * 库里**没有** v_voyage 视图, 所以直接读基础表。出参里的两个港口中文名和船名分别落在
+ * port / vessel 表上, 由 Service 把当前页用到的 id 收集起来**批量**查一次回填
+ * (两个港口的 id 合成一批查, 船名的 id 另查一批)。
  * <p>
- * ⚠️ vsl_id 指向 vessel, 但船舶模块还没做(vessel 表是空的), 所以**不校验**它 ——
- * 校验了会挡住所有航次的创建。等第 6 个模块做完再补。
+ * 三个引用(vslId / 两个港口)都由应用层校验存在性。
+ * <p>
+ * ⚠️ 航次号**不单独查重**: 航次号由船公司自编, 跨公司重号是常态。唯一的是
+ * **(vsl_id, no) 这一对** —— 同一艘船不能有两个同号航次, 不同船可以重号。
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +45,7 @@ public class VoyageServiceImpl implements VoyageService {
 
     private final VoyageMapper voyageMapper;
     private final PortMapper portMapper;
+    private final VesselMapper vesselMapper;
 
     @Override
     public PageResult<VoyageVO> page(VoyageQueryReq req) {
@@ -57,25 +63,26 @@ public class VoyageServiceImpl implements VoyageService {
         Page<Voyage> p = voyageMapper.selectPage(new Page<>(pageNo, pageSize), w);
 
         Map<Long, String> portNames = findPortNames(collectPortIds(p.getRecords()));
-        return PageResult.of(p, (Function<Voyage, VoyageVO>) v -> {
-            VoyageVO vo = toVO(v, portNames);
-            return vo;
-        });
+        Map<Long, String> vesselNames = findVesselNames(collectVesselIds(p.getRecords()));
+        return PageResult.of(p, (Function<Voyage, VoyageVO>) v -> toVO(v, portNames, vesselNames));
     }
 
     @Override
     public VoyageVO getById(Long id) {
         Voyage v = getExisting(id);
-        return toVO(v, findPortNames(collectPortIds(List.of(v))));
+        List<Voyage> one = List.of(v);
+        return toVO(v, findPortNames(collectPortIds(one)), findVesselNames(collectVesselIds(one)));
     }
 
     @Override
     @Transactional
     public void create(VoyageReq req) {
-        validatePortsExist(req.getLoadingPortId(), req.getDischargePortId());
+        validateReferences(req.getVslId(), req.getLoadingPortId(), req.getDischargePortId());
+        String no = trimToNull(req.getNo());
+        ensureVoyageNoUnique(req.getVslId(), no, null);
 
         Voyage e = new Voyage();
-        e.setNo(trimToNull(req.getNo()));
+        e.setNo(no);
         e.setVslId(req.getVslId());
         e.setLoadingPortId(req.getLoadingPortId());
         e.setDischargePortId(req.getDischargePortId());
@@ -87,12 +94,15 @@ public class VoyageServiceImpl implements VoyageService {
     @Transactional
     public void update(Long id, VoyageReq req) {
         getExisting(id);
-        validatePortsExist(req.getLoadingPortId(), req.getDischargePortId());
+        validateReferences(req.getVslId(), req.getLoadingPortId(), req.getDischargePortId());
+        String no = trimToNull(req.getNo());
+        // 查重时排除自己, 否则"只改港口、船和航次号不变"的提交会被误判为重复
+        ensureVoyageNoUnique(req.getVslId(), no, id);
 
         // 整体覆盖: 每个字段都显式 set(null 也能真正写进去)
         LambdaUpdateWrapper<Voyage> u = new LambdaUpdateWrapper<>();
         u.eq(Voyage::getId, id)
-                .set(Voyage::getNo, trimToNull(req.getNo()))
+                .set(Voyage::getNo, no)
                 .set(Voyage::getVslId, req.getVslId())
                 .set(Voyage::getLoadingPortId, req.getLoadingPortId())
                 .set(Voyage::getDischargePortId, req.getDischargePortId());
@@ -120,8 +130,31 @@ public class VoyageServiceImpl implements VoyageService {
         return e;
     }
 
-    /** 两个港口都要校验存在(库里没有外键约束; vsl_id 见类注释, 暂不校验) */
-    private void validatePortsExist(Long loadingPortId, Long dischargePortId) {
+    /**
+     * (vsl_id, no) 是业务上的复合唯一: 同一艘船的同一航次号只能有一条, 不同船可以重号。
+     * 库里也有同样的唯一约束(uq_voyage_vsl_no), 这里提前查是为了返回 409 而不是撞唯一键报 500。
+     * <p>
+     * 两项里**只要有一个为空就跳过** —— 和库里的唯一约束口径一致: PostgreSQL 的 UNIQUE
+     * 不比较 NULL, 所以 (null, '2026E001') 这种行可以有任意多条, 不算冲突。
+     */
+    private void ensureVoyageNoUnique(Long vslId, String no, Long excludeId) {
+        if (vslId == null || no == null) {
+            return;
+        }
+        LambdaQueryWrapper<Voyage> w = new LambdaQueryWrapper<>();
+        w.eq(Voyage::getVslId, vslId);
+        w.eq(Voyage::getNo, no);
+        w.ne(excludeId != null, Voyage::getId, excludeId);
+        if (voyageMapper.selectCount(w) > 0) {
+            throw BizException.conflict("该船舶下已存在航次号: " + no);
+        }
+    }
+
+    /** 三个引用都要校验存在(库里没有外键约束) */
+    private void validateReferences(Long vslId, Long loadingPortId, Long dischargePortId) {
+        if (vslId != null && vesselMapper.selectById(vslId) == null) {
+            throw new BizException("船舶不存在", "vslId=" + vslId);
+        }
         if (loadingPortId != null && portMapper.selectById(loadingPortId) == null) {
             throw new BizException("起始港口不存在", "loadingPortId=" + loadingPortId);
         }
@@ -130,11 +163,12 @@ public class VoyageServiceImpl implements VoyageService {
         }
     }
 
-    private VoyageVO toVO(Voyage v, Map<Long, String> portNames) {
+    private VoyageVO toVO(Voyage v, Map<Long, String> portNames, Map<Long, String> vesselNames) {
         VoyageVO vo = new VoyageVO();
         vo.setId(v.getId());
         vo.setNo(v.getNo());
         vo.setVslId(v.getVslId());
+        vo.setVslName(vesselNames.get(v.getVslId()));
         vo.setLoadingPortId(v.getLoadingPortId());
         vo.setLoadingPortName(portNames.get(v.getLoadingPortId()));
         vo.setDischargePortId(v.getDischargePortId());
@@ -162,6 +196,27 @@ public class VoyageServiceImpl implements VoyageService {
         Map<Long, String> names = new HashMap<>();
         for (Port p : portMapper.selectBatchIds(portIds)) {
             names.put(p.getId(), p.getCnname());
+        }
+        return names;
+    }
+
+    /** 当前页里出现过的船舶 id(去重、去 null) */
+    private List<Long> collectVesselIds(List<Voyage> records) {
+        return records.stream()
+                .map(Voyage::getVslId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    /** 一次查出这批船舶的 id -> 船名。空集合直接返回空表, 不发查询 */
+    private Map<Long, String> findVesselNames(List<Long> vslIds) {
+        if (vslIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (Vessel v : vesselMapper.selectBatchIds(vslIds)) {
+            names.put(v.getId(), v.getName());
         }
         return names;
     }

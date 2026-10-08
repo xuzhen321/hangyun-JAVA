@@ -320,16 +320,22 @@ create table Voyage (
     loading_port_id    bigint,
     discharge_port_id  bigint,
     insert_time        timestamp   not null,
-    update_time        timestamp   not null
+    update_time        timestamp   not null,
+    -- 航次号**不是**全库唯一(航次号由船公司自编, 跨公司重号是常态), 唯一的是
+    -- (船, 航次号) 这一对: 同一艘船不能有两个同号航次, 不同船可以重号。
+    -- PostgreSQL 的唯一约束不比较 NULL, 所以"没填船"或"没填航次号"的行(如 (null, '2026E001'))
+    -- 可以有任意多条, 不会互相冲突 —— 正好对应应用层"任一项为空就跳过查重"的口径。
+    constraint uq_voyage_vsl_no unique (vsl_id, no)
 );
 comment on table  Voyage                    is '航次信息表';
 comment on column Voyage.id                 is '航次ID';
-comment on column Voyage.no                 is '航次号';
+comment on column Voyage.no                 is '航次号, 与 vsl_id 一起唯一';
 comment on column Voyage.vsl_id             is '船舶ID, 逻辑外键 -> Vessel.id';
 comment on column Voyage.loading_port_id    is '起始港口, 逻辑外键 -> Port.id';
 comment on column Voyage.discharge_port_id  is '目的港口, 逻辑外键 -> Port.id';
 comment on column Voyage.insert_time        is '插入时间';
 comment on column Voyage.update_time        is '更新时间';
+comment on constraint uq_voyage_vsl_no on Voyage is '同一艘船的航次号不能重复(不同船可以重号)';
 
 -- 关系模式: Event_Status(id, description_cn, description_en)
 create table Event_Status (
@@ -683,6 +689,20 @@ create index idx_port_harbor_size_id             on Port (harbor_size_id);
 create index idx_port_level_id                   on Port (level_id);
 create index idx_port_port_type_id               on Port (port_type_id);
 create index idx_port_parent_port_id             on Port (parent_port_id);
+
+-- 船舶和港口列表的**前缀搜索**索引(和其它模块同一套: 默认 opclass 的索引撑不起 LIKE)。
+--   vessel: keyword 同时匹配 船名 / MMSI / IMO
+--   port  : keyword 同时匹配 五字码 / 中文名 / 英文名 —— 其中 enname / cnname 两个
+--           上面已经建过了(给 /ports/options 用的), 这里只补缺的那个。
+-- mmsi / imo / unlocode 原本就有 UNIQUE 索引, 但那个服务等值查询, 所以另建模式索引。
+create index idx_vessel_name_pattern     on Vessel (name varchar_pattern_ops);
+create index idx_vessel_mmsi_pattern     on Vessel (mmsi varchar_pattern_ops);
+create index idx_vessel_imo_pattern      on Vessel (imo varchar_pattern_ops);
+create index idx_port_unlocode_pattern   on Port (unlocode varchar_pattern_ops);
+
+-- 📌 其余那几张小字典(country / area / timezone / ship_type / harbor_size /
+--    port_level / port_type)最多十来行, 前缀搜索直接全表扫就行, **故意不加索引** ——
+--    给它们建索引属于净负担(占空间、拖慢写入), 换不来任何收益。
 
 -- 下面两个不是外键索引, 是给港口下拉框的前缀搜索用的(/ports/options 按中英文名前缀匹配)。
 -- 和 Customer.name / qualification 同理: 默认排序规则下普通 btree 撑不起 LIKE,

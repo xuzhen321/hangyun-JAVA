@@ -2,6 +2,9 @@
 
 > 拿到代码后，**按顺序把下面 4 个文件跑一遍**，后端就能用了。后面几个是测试数据，可选——但不装的话，列表页和下拉框都是空的，没法联调。
 
+> ⚠️ **库已经建过、不是全新的？** 别重跑 `initial.sql`（第二次会报 `relation already exists`），
+> 直接看 **第六节「已经建过库了？增量变更」**，照 **6.6 的升级清单**跑一遍。
+
 ---
 
 ## 一、必须执行的 4 个
@@ -9,16 +12,25 @@
 | # | 文件 | 作用 | 不执行的后果 |
 |---|---|---|---|
 | 1 | `initial.sql` | 建 **28 张表** + 索引 + `set_time_fields()` 触发器函数 + 28 个触发器 | 应用**能启动**（Spring 不在启动时校验表结构），但**任何接口一调就 500**，日志里是 `relation "customer" does not exist` |
-| 2 | `viewInitial.sql` | 建 **7 个视图** | 客户和订单的**列表、详情、修改、删除**全部报 `v_customer` / `v_order` 不存在（修改和删除虽然写的是基础表，但存在性校验查的是视图）；**只有新增和批量删除还能用** |
+| 2 | `viewInitial.sql` | 建 **7 个视图** | 客户和订单的**列表、详情、修改、删除**全部报 `v_customer` / `v_order` 不存在（修改和删除虽然写的是基础表，但存在性校验查的是视图）；**只有新增和批量删除还能用**。另外 `GET /vessels`、`GET /ports` 会报**字段 `vessel_type_id` 不存在**（视图少了后补的 id 列，见 6.4） |
 | 3 | `customer-status-data.sql` | 写入客户状态 **1 正常 / 2 异常 / 3 注销** | 客户状态下拉框是空的；客户删除（逻辑删除）会把状态指向不存在的 id |
 | 4 | `order-status-data.sql` | 写入订单状态 **1 已确认 / 2 执行中 / 3 已完成 / 4 已取消** | 订单状态下拉框是空的；订单删除（逻辑删除）同上 |
 
-## 二、可选的 16 个
+## 二、可选的 23 个
 
 | 文件 | 作用 | 依赖 |
 |---|---|---|
 | `customer-data.sql` | 10 条客户样本数据 | 第 3 步（状态 1/2/3） |
-| `port-data.sql` | 10 条港口模拟数据（含 UN/LOCODE 和中英文名） | 第 1 步 |
+| **↓ 下面七份是港口 / 船舶用到的字典，必须在 `port-data.sql` / `vessel-data.sql` 之前跑** | | |
+| `country-data.sql` | 10 个国家（CN/US/JP…） | 第 1 步 |
+| `area-data.sql` | 6 个区域（North/East/South China…） | 第 1 步 |
+| `timezone-data.sql` | 6 个时区（两列都有唯一约束，一个 UTC 偏移只能有一条） | 第 1 步 |
+| `harbor-size-data.sql` | 5 个港口规模档（Very Small → Very Large） | 第 1 步 |
+| `port-level-data.sql` | 4 个港口级别（1~4，按年吞吐量分档：特大型/大型/中型/小型） | 第 1 步 |
+| `port-type-data.sql` | 2 个港口类型 | 第 1 步 |
+| `ship-type-data.sql` | 5 种船型（集装箱船/散货船/油轮/杂货船/滚装船） | 第 1 步 |
+| **↑ 以上七份之间互相独立，谁先谁后都行** | | |
+| `port-data.sql` | 10 条港口模拟数据（含 UN/LOCODE 和中英文名） | **上面七份字典 + 第 1 步** |
 | `cargo-type-data.sql` | 12 条货物种类样本数据 | 第 1 步 |
 | `order-data.sql` | 12 条订单样本数据 | **上面的客户 + 港口，以及第 4 步的状态** |
 | `cargo-data.sql` | 14 条货物样本数据 | **货物种类 + 订单** |
@@ -30,7 +42,7 @@
 | `trailer-data.sql` | 8 辆拖车（车牌 + 司机） | 第 1 步 |
 | `container-trailer-record-data.sql` | 8 条提空箱记录 | **`container-data.sql` + `trailer-data.sql`** |
 | `event-status-data.sql` | 6 条事件状态（1-5 业务值 + 6 内置的"已删除"） | 第 1 步 |
-| `vessel-data.sql` | 5 艘船（船名 / MMSI / IMO） | **`company-data.sql`** |
+| `vessel-data.sql` | 5 艘船（船名 / MMSI / IMO） | **`company-data.sql` + `country-data.sql` + `ship-type-data.sql`** |
 | `voyage-data.sql` | 4 个航次 | **`port-data.sql` + `vessel-data.sql`** |
 | `container-event-data.sql` | 10 条物流事件（含一条逻辑删除的） | **事件状态 + 集装箱 + 港口 + 航次** |
 
@@ -38,6 +50,7 @@
 
 - 不装 `customer-data.sql` → 客户列表是空的，没法选客户下单
 - 不装 `port-data.sql` → `GET /ports/options` 返回 `[]`，起运港/目的港选不了
+- 不装**那七份港口/船舶字典**（country / area / timezone / harbor-size / port-level / port-type / ship-type）→ 港口表单的六组下拉框、船舶表单的船型/船旗国下拉框**全是空的**；而且 `port-data.sql` / `vessel-data.sql` 填的那些字典 id 会全部悬空，列表里国家/区域/时区那几列显示为空
 - 不装 `cargo-type-data.sql` → 货物种类列表是空的，名称搜索没东西可试
 - 不装 `order-data.sql` → 订单列表是空的，`GET /customers/{id}/orders` 也查不到东西
 - 不装 `cargo-data.sql` → `GET /cargos` 查不到东西；**货物种类的删除保护也测不出来**（没有货物引用它们，删谁都会成功）
@@ -49,7 +62,7 @@
 
 装了之后**货物 1 和 3 就删不掉了**（这是有意的，不是 bug）。不需要验证删除保护的话可以不装，文件末尾附了撤销语句。
 
-> 📌 那三个集装箱字典文件**对应的完整资源（`/container-types`、`/container-statuses`、`/companies`）都还没做**——没有增删改接口。这三个文件只是把字典数据备好，让新增集装箱那几栏有东西可选。
+> 📌 那三个集装箱字典文件对应的完整资源（`/container-types`、`/container-statuses`、`/companies`）**都已经做了**（列表/详情/增删改 + `/options`，见 `后端接口设计文档.md` 5.2）。不装这几个文件的话，新增集装箱那几栏没有下拉选项可挑。
 
 ---
 
@@ -66,42 +79,54 @@
 4. order-status-data.sql    内置状态 1-4  ┘ 这两个谁先谁后都行
         ↓
 5. customer-data.sql        客户样本（可选，引用第 3 步的 1/2/3）
-6. port-data.sql            港口样本（可选，只依赖第 1 步）
-7. cargo-type-data.sql      货物种类样本（可选，只依赖第 1 步）
         ↓
-8. order-data.sql           订单样本（可选，依赖第 4/5/6 步）
+6. country-data.sql         国家 1-10    ┐
+7. area-data.sql            区域 1-6     │
+8. timezone-data.sql        时区 1-6     │ 港口/船舶的七份字典, 互相独立,
+9. harbor-size-data.sql     尺寸 1-5     │ 谁先谁后都行 —— 但**必须在
+10. port-level-data.sql     级别 1-4     │ 第 13 步(港口)和第 25 步(船舶)之前**
+11. port-type-data.sql      类型 1-2     │
+12. ship-type-data.sql      船型 1-5     ┘
         ↓
-9. cargo-data.sql           货物样本（可选，依赖第 7/8 步）
+13. port-data.sql           港口样本（可选，**依赖第 6-11 步的六份字典**）
+14. cargo-type-data.sql     货物种类样本（可选，只依赖第 1 步）
         ↓
-10. container-type-data.sql   箱型 1-6   ┐
-11. container-status-data.sql 状态 1-6   │ 三个字典互相独立, 谁先谁后都行
-12. company-data.sql          公司 1-8   ┘
+15. order-data.sql          订单样本（可选，依赖第 4/5/13 步）
         ↓
-13. container-data.sql      集装箱样本（可选，依赖第 10/11/12 步）
+16. cargo-data.sql          货物样本（可选，依赖第 14/15 步）
         ↓
-14. cargo-container-result-data.sql   装箱结果样本（可选，依赖第 9/13 步）
+17. container-type-data.sql   箱型 1-6   ┐
+18. container-status-data.sql 状态 1-6   │ 三个字典互相独立, 谁先谁后都行
+19. company-data.sql          公司 1-8   ┘
         ↓
-15. trailer-data.sql        拖车样本（可选，只依赖第 1 步）
+20. container-data.sql      集装箱样本（可选，依赖第 17/18/19 步）
         ↓
-16. container-trailer-record-data.sql 提空箱记录样本（可选，依赖第 13/15 步）
+21. cargo-container-result-data.sql   装箱结果样本（可选，依赖第 16/20 步）
         ↓
-17. event-status-data.sql   事件状态 1-6（可选，只依赖第 1 步）
+22. trailer-data.sql        拖车样本（可选，只依赖第 1 步）
         ↓
-18. vessel-data.sql         船舶样本（可选，依赖第 12 步的公司）
+23. container-trailer-record-data.sql 提空箱记录样本（可选，依赖第 20/22 步）
         ↓
-19. voyage-data.sql         航次样本（可选，依赖第 6 步的港口 + 第 18 步的船舶）
+24. event-status-data.sql   事件状态 1-6（可选，只依赖第 1 步）
         ↓
-20. container-event-data.sql 物流事件样本（可选，依赖第 8/17/19 步）
+25. vessel-data.sql         船舶样本（可选，依赖第 19 步公司 + 第 6 步国家 + 第 12 步船型）
+        ↓
+26. voyage-data.sql         航次样本（可选，依赖第 13 步港口 + 第 25 步船舶）
+        ↓
+27. container-event-data.sql 物流事件样本（可选，依赖第 24/20/13/26 步）
 ```
 
-第 6、7 步只依赖第 1 步，放在第 5 步前后都行；第 10-12 步同理，放在第 5 步前后都行。
+第 6-12 步只依赖第 1 步，放在第 5 步前后都行；第 14 步同理；第 17-19 步也同理。
 
-⚠️ **第 14 步必须在第 13 步之后**：它引用的三个箱号（`CSNU1234567` 等）就在 `container-data.sql` 里。顺序反了的话，这些装箱记录指向的箱号在 `container` 表里不存在——而且**接口层现在有箱号存在性校验**，前端再想建同样的记录会被 400 拦住。
+⚠️ **第 6-12 步必须排在第 13 步（港口）和第 25 步（船舶）之前**：`port-data.sql` 里的 `country_id/area_id/timezone_id/…` 现在填的是这批字典的真实 id，`vessel-data.sql` 的 `vessel_type_id/country_id` 同理。反了的话港口和船舶的字典列全是悬空 id，**列表里那几列名称会是空的**。
+
+⚠️ **第 21 步必须在第 20 步之后**：它引用的三个箱号（`CSNU1234567` 等）就在 `container-data.sql` 里。顺序反了的话，这些装箱记录指向的箱号在 `container` 表里不存在——而且**接口层现在有箱号存在性校验**，前端再想建同样的记录会被 400 拦住。
 
 ⚠️ **顺序错了不会报错，但会静默出脏数据** —— 库里没有物理外键：
 
 - 第 5 步放在第 3 步之前 → 客户的 `status_id` 指向不存在的状态
-- 第 7 步放在第 5、6 步之前 → 订单的 `customer_id` / 港口 id / `status_id` 全部悬空
+- 第 15 步放在第 5、13 步之前 → 订单的 `customer_id` / 港口 id / `status_id` 全部悬空
+- 第 13 步放在第 6-11 步之前 → 港口的六组字典 id 全部悬空，列表里国家/区域/时区那几列是空的
 
 **判断标准**：被引用的数据先跑。`order-data.sql` 依赖三个文件，所以永远排最后。
 
@@ -142,7 +167,7 @@ psql -h localhost -p 5432 -U postgres -d demo -f container-event-data.sql       
 | 文件 | 重复执行 | 说明 |
 |---|---|---|
 | `initial.sql` | ❌ **不能** | 用的是 `create table`（没有 `if not exists`），第二次跑会报 `relation already exists`。**只在全新库上跑一次** |
-| `viewInitial.sql` | ✅ 可以 | 用的是 `create or replace view` |
+| `viewInitial.sql` | ✅ 可以 | 开头先 `drop view if exists` 再 `create`（**不能只用 `create or replace`**，原因见 6.4） |
 | `customer-status-data.sql` | ✅ 可以 | `on conflict do nothing` |
 | `order-status-data.sql` | ✅ 可以 | 同上 |
 | `customer-data.sql` | ✅ 可以 | 同上 |
@@ -157,10 +182,12 @@ psql -h localhost -p 5432 -U postgres -d demo -f container-event-data.sql       
 | `trailer-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `trailer.no` 是 varchar 主键，没有自增序列 |
 | `container-trailer-record-data.sql` | ✅ 可以 | 同上 |
 | `event-status-data.sql` | ✅ 可以 | 同上 |
+| `country-data.sql` / `area-data.sql` / `timezone-data.sql` / `harbor-size-data.sql` / `port-level-data.sql` / `port-type-data.sql` / `ship-type-data.sql` | ✅ 可以 | 同上（那七份港口/船舶字典） |
 | `vessel-data.sql` | ✅ 可以 | 同上 |
 | `voyage-data.sql` | ✅ 可以 | 同上。⚠️ 它给航次填了 `vsl_id` —— **如果你之前已经跑过这个文件**，那几条航次已存在，`insert` 不会更新它们，要手工跑一遍文件头里那几条 `update` |
 | `container-event-data.sql` | ✅ 可以 | 同上 |
 | `order-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `orders.id` 是 varchar 主键，没有自增序列 |
+| `voyage-unique-constraint.sql` | ✅ 可以 | 用 `do $$` 查过 `pg_constraint`，加过就跳过（见 6.3） |
 
 如果 `initial.sql` 跑到一半失败了，需要先把已建的表删掉再重跑，或者直接删库重建。
 
@@ -212,6 +239,22 @@ alter table cargo_container_result alter column quantity     set not null;
 create index if not exists idx_port_enname_pattern on Port (enname varchar_pattern_ops);
 create index if not exists idx_port_cnname_pattern on Port (cnname varchar_pattern_ops);
 ```
+
+#### 船舶 / 港口列表的前缀搜索索引（给 `/vessels`、`/ports` 的 `keyword` 用）
+
+```sql
+-- vessel: keyword 同时匹配 船名 / MMSI / IMO
+create index if not exists idx_vessel_name_pattern   on Vessel (name varchar_pattern_ops);
+create index if not exists idx_vessel_mmsi_pattern   on Vessel (mmsi varchar_pattern_ops);
+create index if not exists idx_vessel_imo_pattern    on Vessel (imo varchar_pattern_ops);
+
+-- port: keyword 还匹配五字码(中英文名上面那两条已经建过了)
+create index if not exists idx_port_unlocode_pattern on Port (unlocode varchar_pattern_ops);
+```
+
+> `mmsi` / `imo` / `unlocode` 上原本就有 **UNIQUE** 索引，但那个服务等值查询，撑不起 `LIKE 'x%'`，所以另建一个 pattern 变体。
+>
+> 📌 其余那几张小字典（country / area / timezone / ship_type / harbor_size / port_level / port_type）最多十来行，前缀搜索直接全表扫就行，**故意不加索引**。
 
 #### 货物种类的名称前缀索引（给 `/cargo-types` 的 name 搜索用）
 
@@ -265,16 +308,160 @@ create index idx_customer_qualification on Customer (qualification varchar_patte
 ```sql
 select indexname from pg_indexes
 where tablename in ('customer', 'port', 'cargo_type', 'company',
-                    'trailer', 'container_trailer_record')
+                    'trailer', 'container_trailer_record', 'vessel')
   and indexname like '%pattern%';
--- 期望 11 行:
+-- 期望 15 行:
 --   idx_customer_name / idx_customer_qualification
---   idx_port_enname_pattern / idx_port_cnname_pattern
+--   idx_port_enname_pattern / idx_port_cnname_pattern / idx_port_unlocode_pattern
+--   idx_vessel_name_pattern / idx_vessel_mmsi_pattern / idx_vessel_imo_pattern
 --   idx_cargo_type_name_pattern
 --   idx_company_name_pattern / idx_company_code_pattern
 --   idx_trailer_no_pattern / idx_trailer_name_pattern
 --   idx_ctr_trailer_record_container_no_pattern / idx_ctr_trailer_record_track_no_pattern
 ```
+
+### 6.3 航次表的复合唯一约束 `(vsl_id, no)`
+
+**整段直接跑 `voyage-unique-constraint.sql` 就行**（可重复执行，已经加过会自动跳过）。等价的手写语句是：
+
+```sql
+alter table Voyage add constraint uq_voyage_vsl_no unique (vsl_id, no);
+```
+
+> 📌 **为什么要这条约束**：原来航次号**什么都不查**，于是"同一条船 + 同一个航次号"能建出多条。
+> 这种重复在界面上**分不出来**——物流事件视图里显示的就是「船名 + 航次号」，两条一模一样的航次
+> 摆在下拉框/列表里，选错了不会报任何错，轨迹会静默挂到错的航次上。
+>
+> 📌 **为什么不给 `no` 建全库唯一**：航次号是**船公司自编**的，不同公司、不同年份大量重号
+> （`001E` 这种每年复用一条）。全局唯一会挡住合法数据。所以唯一的是 **(船, 航次号) 这一对**。
+>
+> 📌 **`no` 还是可空的，不冲突**：PostgreSQL 的唯一约束**不比较 NULL**，所以
+> `(null, '2026E001')` 这种行可以有任意多条。这和接口层"船或航次号任一为空就跳过查重"是同一口径。
+>
+> ⚠️ 如果加约束时报 `unique_violation`，说明库里**已经有**同船同号的重复航次，先查出来处理掉：
+>
+> ```sql
+> select vsl_id, no, count(*), array_agg(id order by id) as ids
+> from voyage
+> where vsl_id is not null and no is not null
+> group by vsl_id, no
+> having count(*) > 1;
+> -- 期望 0 行。有行的话，决定留哪条、改哪条的航次号或船舶，然后再重跑
+> ```
+
+不改库也能用——应用层同样会查重并返回 409（`voyage-unique-constraint.sql` 是让数据库也兜一道，
+避免并发或手工 SQL 绕过校验）。**但接口层的 409 是新代码就有的，不影响前端联调。**
+
+### 6.4 重建视图（**最容易漏，症状也最明显**）
+
+**把 `viewInitial.sql` 整段重跑一遍就行**（文件开头已经加了 `drop view if exists`，可重复执行）。
+
+> ⚠️ **不能只用 `create or replace view`**，会报这个错：
+>
+> ```
+> [42P16] 错误: 不能将视图列的名称从"flag_state"改成"vessel_type_id"
+> 建议: Use ALTER VIEW ... RENAME COLUMN ... to change name of view column instead.
+> ```
+>
+> **原因**：PostgreSQL 的 `create or replace view` 是**按列的位置**匹配新旧视图的，不是按列名。
+> 给 `v_vessel` 补的 4 个 id 列、给 `v_port` 补的 6 个 id 列**都插在中间**，
+> 于是"第 6 列"从 `flag_state` 变成了 `vessel_type_id`，PostgreSQL 认为你在给列改名，拒绝执行。
+>
+> 报这个错之后还会跟着一串 `[25P02] 当前事务被终止, 事务块结束之前的查询被忽略` ——
+> 那是连锁反应（一句失败，同一个事务里后面的全被忽略），**根因只有 42P16 那一条**。
+>
+> **正确做法**：先删再建。这 7 个视图互相没有依赖（都直接连基表），不用 `cascade`：
+>
+> ```sql
+> drop view if exists v_customer, v_order, v_container_event,
+>                      v_vessel, v_port, v_user, v_operation_log;
+> ```
+>
+> 最新的 `viewInitial.sql` 已经把这句放在文件开头了，直接整段跑即可。
+
+老库里这两个视图**少了后补的 id 列**：
+
+| 视图 | 缺的列 | 谁在用 |
+|---|---|---|
+| `v_vessel` | `vessel_type_id`、`country_id`、`owner_company_id`、`manager_company_id` | `GET /vessels`（列表 / 详情 / 下拉框），也用来按船旗国、船型筛选 |
+| `v_port` | `country_id`、`area_id`、`timezone_id`、`harbor_size_id`、`level_id`、`port_type_id` | `GET /ports`（列表 / 详情），也用来按国家筛选 |
+
+> ⚠️ **不重建的症状**：`GET /vessels`、`GET /ports` 直接 **500**，日志里是
+> `PSQLException: 错误: 字段 "vessel_type_id" 不存在`。
+>
+> 原因是视图**按定义缓存在库里**——代码按新列名发 SELECT，库里的视图还是旧的，
+> 必然对不上。**光重启后端没用，必须重跑 `viewInitial.sql`。**
+
+### 6.5 给老的港口 / 船舶数据补字典 id
+
+`port-data.sql` 和 `vessel-data.sql` 现在会填六组 / 两组的字典 id，但它们用的是
+`on conflict do nothing`——**你那 10 条港口、5 艘船早就存在了，重跑不会更新它们**，
+字典 id 还是 null（列表里国家 / 区域 / 时区 / 船型那几列会显示为空）。
+
+先确认是不是 null：
+
+```sql
+select id, unlocode, country_id, area_id, timezone_id from port order by id;
+select id, name, vessel_type_id, country_id from vessel order by id;
+```
+
+是 null 的话，跑下面两段回填（前提：6-12 步那七份字典已经装好）：
+
+```sql
+-- 港口：10 条的六组字典 id
+update port p set country_id     = x.country_id,
+                  area_id        = x.area_id,
+                  timezone_id    = x.timezone_id,
+                  harbor_size_id = x.harbor_size_id,
+                  level_id       = x.level_id,
+                  port_type_id   = x.port_type_id
+from (values
+    (1,  1, 2, 1,            5, 1, 1),   -- 上海港
+    (2,  1, 2, 1,            5, 1, 1),   -- 宁波港
+    (3,  1, 3, 1,            5, 1, 1),   -- 深圳港
+    (4,  1, 1, 1,            5, 2, 1),   -- 青岛港
+    (5,  1, 1, 1,            5, 2, 1),   -- 天津港
+    (6,  1, 3, 1,            4, 2, 1),   -- 厦门港
+    (7,  1, 1, 1,            4, 2, 1),   -- 大连港
+    (8,  1, 2, 1,            4, 3, 1),   -- 连云港港
+    (9,  2, 5, 2,            5, 1, 1),   -- 洛杉矶港
+    (10, 5, 4, null::bigint, 5, 1, 1)    -- 新加坡港(它是 UTC+8, 但那条时区已被上海占用)
+) as x(id, country_id, area_id, timezone_id, harbor_size_id, level_id, port_type_id)
+where p.id = x.id;
+
+-- 船舶：5 艘的船型 + 船旗国（注意第 4 艘船型是 5、第 2/3/4 艘船旗国是 6，不是全都一样）
+update vessel v set vessel_type_id = x.type_id, country_id = x.country_id
+from (values
+    (1, 1, 1),   -- 中远海运之星   集装箱船 / 中国
+    (2, 1, 6),   -- 马士基哥本哈根 集装箱船 / 德国
+    (3, 1, 6),   -- 地中海伊莎贝拉 集装箱船 / 德国
+    (4, 5, 6),   -- 达飞雅克萨德   滚装船   / 德国
+    (5, 1, 1)    -- 长荣之星       集装箱船 / 中国
+) as x(id, type_id, country_id)
+where v.id = x.id;
+```
+
+> 📌 这两段和 `port-data.sql` / `vessel-data.sql` 文件头里写的是同一份内容，跑一边就行。
+
+### 6.6 老库升级清单（照这个顺序）
+
+```sql
+-- ① 七份字典数据（顺序随意，但必须在 ② 之前）
+--    country-data.sql / area-data.sql / timezone-data.sql / harbor-size-data.sql
+--    port-level-data.sql / port-type-data.sql / ship-type-data.sql
+
+-- ② 重建视图（治 500，最容易漏）
+--    viewInitial.sql
+
+-- ③ 回填老数据的字典 id（见 6.5 的两段 update）
+
+-- ④ 航次复合唯一约束（见 6.3）
+--    voyage-unique-constraint.sql
+
+-- ⑤ 可选：船舶/港口列表用的模式索引（见 6.2）
+```
+
+**最后重启后端** —— 代码改动（船名、409 查重、港口过滤）都要重新编译启动才生效。
 
 ## 七、装完怎么确认
 
@@ -330,6 +517,34 @@ select count(*) from container_event;
 
 -- 航次的 vsl_id 应该都有值了（不是 null），否则轨迹里船名还是空的
 select id, no, vsl_id from voyage order by id;
+
+-- 七份港口/船舶字典: 10 / 6 / 6 / 5 / 3 / 2 / 5
+select count(*) from country;
+select count(*) from area;
+select count(*) from timezone;
+select count(*) from harbor_size;
+select count(*) from port_level;
+select count(*) from port_type;
+select count(*) from ship_type;
+
+-- 视图的列补上了没有? 期望 4 行
+--   v_port   -> area_id, country_id
+--   v_vessel -> country_id, vessel_type_id
+-- 少行的话 GET /vessels、GET /ports 会 500, 见 6.4
+select table_name, column_name from information_schema.columns
+where (table_name = 'v_vessel' and column_name in ('vessel_type_id', 'country_id'))
+   or (table_name = 'v_port'   and column_name in ('country_id', 'area_id'))
+order by table_name, column_name;
+
+-- 航次的复合唯一约束在不在？期望 1 行(uq_voyage_vsl_no)。
+-- 0 行说明你的库是 6.3 之前建的、还没跑过 voyage-unique-constraint.sql
+-- （不跑也能用，接口层照样会查重返回 409）
+select conname from pg_constraint where conname = 'uq_voyage_vsl_no';
+
+-- 有没有同船同号的重复航次？期望 0 行
+select vsl_id, no, count(*) from voyage
+where vsl_id is not null and no is not null
+group by vsl_id, no having count(*) > 1;
 ```
 
 再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 4 步都到位了。

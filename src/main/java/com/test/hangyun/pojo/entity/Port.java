@@ -5,18 +5,19 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 /**
- * 港口表 port 。
+ * 港口信息表 port （写用）。
  * <p>
- * 目前只服务于两件事:
- * <ul>
- *   <li>订单的起运港/目的港**引用校验**(selectById 判断存在性)</li>
- *   <li>港口**下拉框搜索**(cnname / enname / unlocode 三个字段)</li>
- * </ul>
- * 所以只映射了这几列。/ports 做成完整资源(列表、详情、增删改)时, 再按 initial.sql 补全其余字段。
+ * 被订单(起运港/目的港)、物流事件(发生地)、航次(起始/目的港)、船舶(无)等多处引用。
  * <p>
- * ⚠️ 字段不全, 不要拿它去接列表/详情查询 —— 没映射的列会静默为 null。
- * 港口列表/详情将来要走视图 v_port(那里已经联好了国家、区域、时区等)。
+ * 港口是**逻辑删除**: 把 state 置为 '3'(删除), 行还在, 那些引用就不会悬空。
+ * state 取值: 0默认, 1新增, 2修改, 3删除。
+ * <p>
+ * 六个字典引用(country_id / area_id / timezone_id / harbor_size_id / level_id /
+ * port_type_id)和一个自引用(parent_port_id 母港)都是逻辑外键, 库里没有物理约束。
  */
 @Data
 @TableName("port")
@@ -25,7 +26,7 @@ public class Port {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    /** 港口五字码(UN/LOCODE), 如 CNSHA。库里有唯一约束 */
+    /** 港口五字码, 如 CNSHA。库里有唯一约束 */
     private String unlocode;
 
     /** 港口英文名 */
@@ -34,10 +35,45 @@ public class Port {
     /** 港口中文名 */
     private String cnname;
 
-    /**
-     * 数据状态: 0默认, 1新增, 2修改, 3删除。
-     * 港口是**逻辑删除**, 查询时必须排除 3(见 PortConstants.STATE_DELETED)。
-     * 该列允许为 null, 用 "state <> '3'" 过滤会连 null 一起漏掉, 要额外放行。
-     */
+    /** 国家ID, 逻辑外键 -> country.id */
+    private Long countryId;
+
+    /** 区域ID, 逻辑外键 -> area.id */
+    private Long areaId;
+
+    /** 时区ID, 逻辑外键 -> timezone.id */
+    private Long timezoneId;
+
+    /** 港口尺寸ID, 逻辑外键 -> harbor_size.id */
+    private Long harborSizeId;
+
+    /** 港口级别ID, 逻辑外键 -> port_level.id */
+    private Long levelId;
+
+    /** 港口类型ID, 逻辑外键 -> port_type.id */
+    private Long portTypeId;
+
+    /** 母港ID, 逻辑外键 -> port.id(自反联系) */
+    private Long parentPortId;
+
+    /** 港口中心点纬度 */
+    private BigDecimal latitude;
+
+    /** 港口中心点经度 */
+    private BigDecimal longitude;
+
+    /** 港口范围(WKT 格式) */
+    private String geom;
+
+    /** 港口所在省份 */
+    private String province;
+
+    /** 数据状态: 0默认, 1新增, 2修改, 3删除 */
     private String state;
+
+    /** 由数据库触发器维护 */
+    private LocalDateTime insertTime;
+
+    /** 由数据库触发器维护 */
+    private LocalDateTime updateTime;
 }
