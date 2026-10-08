@@ -137,6 +137,9 @@ psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql
 
 `initial.sql` 只能跑一次（见上一节），所以**库已经建过的话，下面这些改动不会自动生效**，要手动执行。
 
+> 📌 另外，集装箱状态里新增了一条**内置的「已删除」(id=7)**——集装箱的"删除"就是改成它。
+> 这条**不用手写 SQL**：**重跑一遍 `container-status-data.sql` 就行**（那个文件可重复执行，`on conflict do nothing`）。
+
 ### 6.1 两张表的业务列改为 not null
 
 `cargo` 和 `cargo_container_result` 的"必需信息"列现在都是 `not null`（见 `initial.sql` 的编写约定第 7 条）。
@@ -250,9 +253,9 @@ select count(*) from cargo;
 -- 装了 cargo-container-result-data.sql 的话应该是 3
 select count(*) from cargo_container_result;
 
--- 集装箱那几份: 6 / 6 / 8 / 6
+-- 集装箱那几份: 6 / 7 / 8 / 6
 select count(*) from container_type;
-select count(*) from container_status;
+select count(*) from container_status;   -- 7 条: 1-6 是示例值, 7 是内置的「已删除」
 select count(*) from company;
 select count(*) from container;
 ```

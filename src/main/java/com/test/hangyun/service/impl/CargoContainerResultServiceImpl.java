@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.ContainerStatusConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CargoContainerResultQueryReq;
 import com.test.hangyun.dto.CargoContainerResultReq;
@@ -16,6 +17,7 @@ import com.test.hangyun.mapper.ContainerMapper;
 import com.test.hangyun.pojo.entity.Cargo;
 import com.test.hangyun.pojo.entity.CargoContainerResult;
 import com.test.hangyun.pojo.entity.CargoType;
+import com.test.hangyun.pojo.entity.Container;
 import com.test.hangyun.service.CargoContainerResultService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -190,10 +192,18 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
         }
     }
 
-    /** 箱号必须在 container 表里真实存在, 否则会登记出一条挂在"不存在"的箱子上的记录 */
+    /**
+     * 箱号必须在 container 表里真实存在, 否则会登记出一条挂在"不存在"的箱子上的记录。
+     * <p>
+     * 另外**已删除**的集装箱也不能再装货: 它虽然还在库里(为了保留历史记录), 但已经不可用了。
+     */
     private void validateContainerExists(String containerNo) {
-        if (containerMapper.selectById(containerNo) == null) {
+        Container container = containerMapper.selectById(containerNo);
+        if (container == null) {
             throw new BizException("集装箱不存在", "containerNo=" + containerNo);
+        }
+        if (ContainerStatusConstants.isDeleted(container.getStatusId())) {
+            throw new BizException("集装箱已删除, 不能装箱: " + containerNo);
         }
     }
 

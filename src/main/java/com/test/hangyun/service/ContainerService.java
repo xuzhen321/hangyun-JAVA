@@ -22,9 +22,9 @@ public interface ContainerService {
     /** 修改: **改不了箱号**(主键) */
     void update(String no, ContainerUpdateReq req);
 
-    /** 删除, 有装箱结果引用该箱号时拒绝 */
+    /** 逻辑删除: 把状态改成"已删除"，行还在，历史记录查得到 */
     void delete(String no);
 
-    /** 批量删除。严格语义: 只要有一个被引用就整批拒绝; 不存在的箱号忽略 */
+    /** 批量逻辑删除。宽松语义: 存在的改状态、不存在的箱号忽略，幂等 */
     void deleteBatch(List<String> nos);
 }
