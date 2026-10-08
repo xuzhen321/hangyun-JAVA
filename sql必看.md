@@ -13,7 +13,7 @@
 | 3 | `customer-status-data.sql` | 写入客户状态 **1 正常 / 2 异常 / 3 注销** | 客户状态下拉框是空的；客户删除（逻辑删除）会把状态指向不存在的 id |
 | 4 | `order-status-data.sql` | 写入订单状态 **1 已确认 / 2 执行中 / 3 已完成 / 4 已取消** | 订单状态下拉框是空的；订单删除（逻辑删除）同上 |
 
-## 二、可选的 6 个
+## 二、可选的 10 个
 
 | 文件 | 作用 | 依赖 |
 |---|---|---|
@@ -22,17 +22,27 @@
 | `cargo-type-data.sql` | 12 条货物种类样本数据 | 第 1 步 |
 | `order-data.sql` | 12 条订单样本数据 | **上面的客户 + 港口，以及第 4 步的状态** |
 | `cargo-data.sql` | 14 条货物样本数据 | **货物种类 + 订单** |
-| `cargo-container-result-data.sql` | **验证专用**，见下 | **`cargo-data.sql`** |
+| `container-type-data.sql` | 6 种箱型 | 第 1 步 |
+| `container-status-data.sql` | 6 种集装箱状态（中英文两列） | 第 1 步 |
+| `company-data.sql` | 8 家公司（箱主 / 操作方，含箱主代码） | 第 1 步 |
+| `container-data.sql` | 6 个集装箱 | **上面三个字典** |
+| `cargo-container-result-data.sql` | 3 条装箱结果样本数据 | **`cargo-data.sql` + `container-data.sql`** |
 
-前五个都是**纯测试数据，不装不影响功能**，但装了才能端到端联调：
+都是**纯测试数据，不装不影响功能**，但装了才能端到端联调：
 
 - 不装 `customer-data.sql` → 客户列表是空的，没法选客户下单
 - 不装 `port-data.sql` → `GET /ports/options` 返回 `[]`，起运港/目的港选不了
 - 不装 `cargo-type-data.sql` → 货物种类列表是空的，名称搜索没东西可试
 - 不装 `order-data.sql` → 订单列表是空的，`GET /customers/{id}/orders` 也查不到东西
 - 不装 `cargo-data.sql` → `GET /cargos` 查不到东西；**货物种类的删除保护也测不出来**（没有货物引用它们，删谁都会成功）
+- 不装**那三张集装箱字典** → 新增集装箱时，箱型 / 箱主 / 操作方 / 状态**四栏全都没有下拉选项**
+- 不装 `container-data.sql` → `GET /containers` 是空的；而且**一条装箱结果都建不了**（箱号必须是已存在的集装箱，见下）
 
-⚠️ **最后那个不一样，它是"验证专用"的**：往 `cargo_container_result`（装箱结果）里插几行，让货物能被引用，**从而验证"订单货物的删除保护"**。装箱模块本身还没做，所以它不是业务数据。不需要验证删除保护的话**可以不装**；装了之后货物 1 和 3 就删不掉了（文件末尾附了撤销语句）。
+⚠️ **`cargo-container-result-data.sql` 有用处**：既让 `/cargo-container-results` 的列表和筛选有东西可试，又让**「订单货物的删除保护」可以被验证**——删货物前会检查有没有装箱记录引用它，表空着的话删任何货物都会成功，这道保护等于测不到。
+
+装了之后**货物 1 和 3 就删不掉了**（这是有意的，不是 bug）。不需要验证删除保护的话可以不装，文件末尾附了撤销语句。
+
+> 📌 那三个集装箱字典文件**对应的完整资源（`/container-types`、`/container-statuses`、`/companies`）都还没做**——没有增删改接口。这三个文件只是把字典数据备好，让新增集装箱那几栏有东西可选。
 
 ---
 
@@ -50,16 +60,24 @@
         ↓
 5. customer-data.sql        客户样本（可选，引用第 3 步的 1/2/3）
 6. port-data.sql            港口样本（可选，只依赖第 1 步）
-7. cargo-type-data.sql      货物种类样本（可选, 只依赖第 1 步）
+7. cargo-type-data.sql      货物种类样本（可选，只依赖第 1 步）
         ↓
 8. order-data.sql           订单样本（可选，依赖第 4/5/6 步）
         ↓
 9. cargo-data.sql           货物样本（可选，依赖第 7/8 步）
         ↓
-10. cargo-container-result-data.sql   装箱结果验证数据（可选，依赖第 9 步）
+10. container-type-data.sql   箱型 1-6   ┐
+11. container-status-data.sql 状态 1-6   │ 三个字典互相独立, 谁先谁后都行
+12. company-data.sql          公司 1-8   ┘
+        ↓
+13. container-data.sql      集装箱样本（可选，依赖第 10/11/12 步）
+        ↓
+14. cargo-container-result-data.sql   装箱结果样本（可选，依赖第 9/13 步）
 ```
 
-第 6、7 步只依赖第 1 步，放在第 5 步前后都行。
+第 6、7 步只依赖第 1 步，放在第 5 步前后都行；第 10-12 步同理，放在第 5 步前后都行。
+
+⚠️ **第 14 步必须在第 13 步之后**：它引用的三个箱号（`CSNU1234567` 等）就在 `container-data.sql` 里。顺序反了的话，这些装箱记录指向的箱号在 `container` 表里不存在——而且**接口层现在有箱号存在性校验**，前端再想建同样的记录会被 400 拦住。
 
 ⚠️ **顺序错了不会报错，但会静默出脏数据** —— 库里没有物理外键：
 
@@ -82,7 +100,11 @@ psql -h localhost -p 5432 -U postgres -d demo -f port-data.sql       # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f cargo-type-data.sql # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f order-data.sql      # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f cargo-data.sql      # 可选
-psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql  # 可选, 只为验证删除保护
+psql -h localhost -p 5432 -U postgres -d demo -f container-type-data.sql      # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f container-status-data.sql    # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f company-data.sql             # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f container-data.sql           # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql  # 可选
 ```
 
 也可以在 Navicat / DataGrip 里按同样的顺序打开并运行。
@@ -102,6 +124,10 @@ psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql
 | `port-data.sql` | ✅ 可以 | 同上 |
 | `cargo-type-data.sql` | ✅ 可以 | 同上 |
 | `cargo-data.sql` | ✅ 可以 | 同上 |
+| `container-type-data.sql` | ✅ 可以 | 同上 |
+| `container-status-data.sql` | ✅ 可以 | 同上 |
+| `company-data.sql` | ✅ 可以 | 同上 |
+| `container-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `container.no` 是 varchar 主键，没有自增序列 |
 | `cargo-container-result-data.sql` | ✅ 可以 | 同上 |
 | `order-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `orders.id` 是 varchar 主键，没有自增序列 |
 
@@ -111,18 +137,22 @@ psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql
 
 `initial.sql` 只能跑一次（见上一节），所以**库已经建过的话，下面这些改动不会自动生效**，要手动执行。
 
-### 6.1 Cargo 三列改为 not null
+### 6.1 两张表的业务列改为 not null
 
-`cargo_type_id` / `order_id` / `quantity` 现在都是 `not null`（这三列是货物的必需信息）。
+`cargo` 和 `cargo_container_result` 的"必需信息"列现在都是 `not null`（见 `initial.sql` 的编写约定第 7 条）。
 
-> ⚠️ **执行前先确认没有空值**，否则 `set not null` 会直接失败：
+> ⚠️ **执行前必须先确认没有空值**，否则 `set not null` 会直接报错中断：
 >
 > ```sql
+> -- 两个都应该是 0
 > select count(*) from cargo
 > where cargo_type_id is null or order_id is null or quantity is null;
+>
+> select count(*) from cargo_container_result
+> where cargo_id is null or container_no is null or quantity is null;
 > ```
 >
-> 结果不是 0 的话，得先把这些行补全或删掉。如果你之前装过旧版的 `cargo-data.sql`，里面 id=13 那行 `cargo_type_id` 是空的，先执行：
+> 结果不是 0 的话，先把这些行补全或删掉。**装过旧版 `cargo-data.sql` 的话，里面 id=13 那行 `cargo_type_id` 是空的**，先执行：
 >
 > ```sql
 > update cargo set cargo_type_id = 1 where cargo_type_id is null;
@@ -132,21 +162,27 @@ psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql
 alter table cargo alter column cargo_type_id set not null;
 alter table cargo alter column order_id      set not null;
 alter table cargo alter column quantity      set not null;
+
+alter table cargo_container_result alter column cargo_id     set not null;
+alter table cargo_container_result alter column container_no set not null;
+alter table cargo_container_result alter column quantity     set not null;
 ```
 
 ### 6.2 索引的增量变更
 
+下面全部用了 `if not exists` / `drop if exists`，**重复执行也不会报错**，可以放心整段跑。
+
 #### 港口的中英文名前缀索引（给 `/ports/options` 用）
 
 ```sql
-create index idx_port_enname_pattern on Port (enname varchar_pattern_ops);
-create index idx_port_cnname_pattern on Port (cnname varchar_pattern_ops);
+create index if not exists idx_port_enname_pattern on Port (enname varchar_pattern_ops);
+create index if not exists idx_port_cnname_pattern on Port (cnname varchar_pattern_ops);
 ```
 
 #### 货物种类的名称前缀索引（给 `/cargo-types` 的 name 搜索用）
 
 ```sql
-create index idx_cargo_type_name_pattern on Cargo_Type (name varchar_pattern_ops);
+create index if not exists idx_cargo_type_name_pattern on Cargo_Type (name varchar_pattern_ops);
 ```
 
 #### 客户的姓名 / 资质前缀索引（给 `/customers` 的 name、qualification 搜索用）
@@ -213,6 +249,12 @@ select count(*) from cargo;
 
 -- 装了 cargo-container-result-data.sql 的话应该是 3
 select count(*) from cargo_container_result;
+
+-- 集装箱那几份: 6 / 6 / 8 / 6
+select count(*) from container_type;
+select count(*) from container_status;
+select count(*) from company;
+select count(*) from container;
 ```
 
 再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 4 步都到位了。

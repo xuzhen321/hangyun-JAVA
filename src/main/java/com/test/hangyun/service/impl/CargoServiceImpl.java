@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CargoCreateReq;
 import com.test.hangyun.dto.CargoQueryReq;
 import com.test.hangyun.dto.CargoUpdateReq;
+import com.test.hangyun.dto.vo.CargoOptionVO;
 import com.test.hangyun.dto.vo.CargoVO;
 import com.test.hangyun.mapper.CargoMapper;
 import com.test.hangyun.mapper.CargoTypeMapper;
@@ -78,6 +80,31 @@ public class CargoServiceImpl implements CargoService {
         Map<Long, String> typeNames = findTypeNames(collectTypeIds(p.getRecords()));
         return PageResult.of(p, (Function<Cargo, CargoVO>)
                 c -> CargoVO.from(c, typeNames.get(c.getCargoTypeId())));
+    }
+
+    @Override
+    public List<CargoOptionVO> options(String cargoTypeName, String orderId) {
+        LambdaQueryWrapper<Cargo> w = new LambdaQueryWrapper<>();
+
+        if (StringUtils.hasText(cargoTypeName)) {
+            List<Long> typeIds = findCargoTypeIdsByNamePrefix(cargoTypeName.trim());
+            if (typeIds.isEmpty()) {
+                // 没有种类匹配这个前缀; 同时避开空集合传给 in() 会拼出 "IN ()" 的坑
+                return List.of();
+            }
+            w.in(Cargo::getCargoTypeId, typeIds);
+        }
+        w.eq(StringUtils.hasText(orderId), Cargo::getOrderId, orderId);
+        w.orderByAsc(Cargo::getId);
+
+        // searchCount=false: 下拉框不需要 total, 省掉那条 COUNT
+        List<Cargo> records = cargoMapper.selectPage(
+                new Page<>(1, OptionConstants.OPTION_LIMIT, false), w).getRecords();
+
+        Map<Long, String> typeNames = findTypeNames(collectTypeIds(records));
+        return records.stream()
+                .map(c -> CargoOptionVO.of(c, typeNames.get(c.getCargoTypeId())))
+                .toList();
     }
 
     @Override
