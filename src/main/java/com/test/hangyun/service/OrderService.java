@@ -14,6 +14,9 @@ public interface OrderService {
     /** 分页查询(读视图 v_order) */
     PageResult<OrderVO> page(OrderQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<OrderVO> listForExport(OrderQueryReq req);
+
     /**
      * 某个客户名下的**全部**订单(分页, 读视图 v_order)。
      * <p>

@@ -12,6 +12,9 @@ public interface ContainerEventService {
     /** 分页查询, 支持按箱号(精确)、事件状态(精确)、发生时间区间筛选 */
     PageResult<ContainerEventVO> page(ContainerEventQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<ContainerEventVO> listForExport(ContainerEventQueryReq req);
+
     /** 详情 */
     ContainerEventVO getById(Long id);
 

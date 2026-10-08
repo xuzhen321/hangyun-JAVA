@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.ContainerStatusConstants;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CargoContainerResultQueryReq;
 import com.test.hangyun.dto.CargoContainerResultReq;
@@ -17,7 +18,9 @@ import com.test.hangyun.mapper.ContainerMapper;
 import com.test.hangyun.pojo.entity.Cargo;
 import com.test.hangyun.pojo.entity.CargoContainerResult;
 import com.test.hangyun.pojo.entity.CargoType;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Container;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.CargoContainerResultService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -63,6 +66,34 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<CargoContainerResult> w = buildWrapper(req);
+        w.orderByAsc(CargoContainerResult::getId);
+
+        Page<CargoContainerResult> p =
+                cargoContainerResultMapper.selectPage(new Page<>(pageNo, pageSize), w);
+
+        // 第二步: 回填货物名称和订单号
+        return new PageResult<>(p.getTotal(), p.getCurrent(), p.getSize(), assemble(p.getRecords()));
+    }
+
+    @Override
+    @OpLog(module = "货物装箱结果", table = "cargo_container_result", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<CargoContainerResultVO> listForExport(CargoContainerResultQueryReq req) {
+        LambdaQueryWrapper<CargoContainerResult> w = buildWrapper(req);
+        w.orderByAsc(CargoContainerResult::getId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<CargoContainerResult> rows = cargoContainerResultMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return assemble(rows);
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<CargoContainerResult> buildWrapper(CargoContainerResultQueryReq req) {
         LambdaQueryWrapper<CargoContainerResult> w = new LambdaQueryWrapper<>();
 
         // 第一步: "货物名称"和"订单号"都不在本表上, 先拿它们筛出符合条件的 cargo.id。
@@ -74,9 +105,10 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
         if (namePrefix != null || orderId != null) {
             List<Long> cargoIds = findCargoIds(namePrefix, orderId);
             if (cargoIds.isEmpty()) {
-                // 没有货物符合条件, 结果必然为空, 直接短路。
-                // 这同时也避开了 MP 的坑: 空集合传给 in() 会拼出 "IN ()", 是非法 SQL。
-                return new PageResult<>(0, pageNo, pageSize, List.of());
+                // 没有货物符合条件, 结果必然为空。用恒假条件表达"空结果", 让列表和导出共用同一个
+                // wrapper —— 空集合传给 MP 的 in() 会拼出 "IN ()", 是非法 SQL。
+                w.apply("1 = 0");
+                return w;
             }
             w.in(CargoContainerResult::getCargoId, cargoIds);
         }
@@ -84,16 +116,14 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
         // 集装箱号是本表的列, 直接精确匹配
         w.eq(StringUtils.hasText(req.getContainerNo()),
                 CargoContainerResult::getContainerNo, req.getContainerNo());
+        return w;
+    }
 
-        w.orderByAsc(CargoContainerResult::getId);
-
-        Page<CargoContainerResult> p =
-                cargoContainerResultMapper.selectPage(new Page<>(pageNo, pageSize), w);
-
-        // 第二步: 回填货物名称和订单号
-        Map<Long, Cargo> cargoById = findCargos(collectCargoIds(p.getRecords()));
+    /** 列表和导出共用的组装: 批量查货物后回填货物名称和订单号 */
+    private List<CargoContainerResultVO> assemble(List<CargoContainerResult> records) {
+        Map<Long, Cargo> cargoById = findCargos(collectCargoIds(records));
         Map<Long, String> typeNames = findTypeNames(cargoById.values());
-        return PageResult.of(p, (Function<CargoContainerResult, CargoContainerResultVO>) r -> {
+        return records.stream().map(r -> {
             Cargo cargo = cargoById.get(r.getCargoId());
             // 数据正常时 cargo 一定查得到(cargo_id 是 not null, 且删货物会被引用检查挡住)。
             // 万一有人直接改库把 cargo 删了, 这里降级成 null 而不是抛异常, 免得整个列表打不开。
@@ -102,7 +132,7 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
             }
             return CargoContainerResultVO.from(r,
                     typeNames.get(cargo.getCargoTypeId()), cargo.getOrderId());
-        });
+        }).toList();
     }
 
     @Override
@@ -119,6 +149,7 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
     }
 
     @Override
+    @OpLog(module = "货物装箱结果", table = "cargo_container_result", type = OpType.INSERT, desc = "新增装箱结果")
     @Transactional
     public void create(CargoContainerResultReq req) {
         String containerNo = req.getContainerNo().trim();
@@ -136,6 +167,7 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
     }
 
     @Override
+    @OpLog(module = "货物装箱结果", table = "cargo_container_result", type = OpType.UPDATE, desc = "修改装箱结果")
     @Transactional
     public void update(Long id, CargoContainerResultReq req) {
         getExisting(id);
@@ -156,6 +188,7 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
     }
 
     @Override
+    @OpLog(module = "货物装箱结果", table = "cargo_container_result", type = OpType.DELETE, desc = "删除装箱结果")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -164,6 +197,7 @@ public class CargoContainerResultServiceImpl implements CargoContainerResultServ
     }
 
     @Override
+    @OpLog(module = "货物装箱结果", table = "cargo_container_result", type = OpType.DELETE, desc = "批量删除装箱结果")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能传进重复的 id

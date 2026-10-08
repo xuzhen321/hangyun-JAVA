@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.VesselCreateReq;
@@ -17,8 +18,10 @@ import com.test.hangyun.mapper.CountryMapper;
 import com.test.hangyun.mapper.ShipTypeMapper;
 import com.test.hangyun.mapper.VesselMapper;
 import com.test.hangyun.mapper.VesselViewMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Company;
 import com.test.hangyun.pojo.entity.Vessel;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.view.VesselView;
 import com.test.hangyun.service.VesselService;
 import lombok.RequiredArgsConstructor;
@@ -53,14 +56,36 @@ public class VesselServiceImpl implements VesselService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
-        LambdaQueryWrapper<VesselView> w = new LambdaQueryWrapper<>();
-        applyKeywordFilter(w, req.getKeyword());
-        w.eq(req.getCountryId() != null, VesselView::getCountryId, req.getCountryId());
-        w.eq(req.getVesselTypeId() != null, VesselView::getVesselTypeId, req.getVesselTypeId());
+        LambdaQueryWrapper<VesselView> w = buildWrapper(req);
         w.orderByAsc(VesselView::getId);
 
         Page<VesselView> p = vesselViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
         return PageResult.of(p, VesselVO::from);
+    }
+
+    @Override
+    @OpLog(module = "船舶管理", table = "vessel", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<VesselVO> listForExport(VesselQueryReq req) {
+        LambdaQueryWrapper<VesselView> w = buildWrapper(req);
+        w.orderByAsc(VesselView::getId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<VesselView> rows = vesselViewMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return rows.stream().map(VesselVO::from).toList();
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<VesselView> buildWrapper(VesselQueryReq req) {
+        LambdaQueryWrapper<VesselView> w = new LambdaQueryWrapper<>();
+        applyKeywordFilter(w, req.getKeyword());
+        w.eq(req.getCountryId() != null, VesselView::getCountryId, req.getCountryId());
+        w.eq(req.getVesselTypeId() != null, VesselView::getVesselTypeId, req.getVesselTypeId());
+        return w;
     }
 
     @Override
@@ -87,6 +112,7 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
+    @OpLog(module = "船舶管理", table = "vessel", type = OpType.INSERT, desc = "新增船舶")
     @Transactional
     public void create(VesselCreateReq req) {
         String mmsi = trimToNull(req.getMmsi());
@@ -111,6 +137,7 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
+    @OpLog(module = "船舶管理", table = "vessel", type = OpType.UPDATE, desc = "修改船舶")
     @Transactional
     public void update(Long id, VesselUpdateReq req) {
         getExisting(id);
@@ -138,6 +165,7 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
+    @OpLog(module = "船舶管理", table = "vessel", type = OpType.DELETE, desc = "删除船舶")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -151,6 +179,7 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
+    @OpLog(module = "船舶管理", table = "vessel", type = OpType.DELETE, desc = "批量删除船舶")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         List<Long> distinctIds = ids.stream().distinct().toList();

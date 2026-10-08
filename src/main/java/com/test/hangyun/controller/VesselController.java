@@ -8,11 +8,15 @@ import com.test.hangyun.dto.VesselQueryReq;
 import com.test.hangyun.dto.VesselUpdateReq;
 import com.test.hangyun.dto.vo.VesselOptionVO;
 import com.test.hangyun.dto.vo.VesselVO;
+import com.test.hangyun.excel.ExcelColumn;
+import com.test.hangyun.excel.ExcelExporter;
+import com.test.hangyun.excel.ExcelResponse;
 import com.test.hangyun.service.VesselService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,10 +37,44 @@ public class VesselController {
 
     private final VesselService vesselService;
 
+    private final ExcelExporter excelExporter;
+
+    /** 导出列。**表头用中文**, 与列表列头一致 */
+    private static final List<ExcelColumn<VesselVO>> EXPORT_COLUMNS = List.of(
+            ExcelColumn.of("船舶ID", VesselVO::getId),
+            ExcelColumn.of("船名", VesselVO::getShipname),
+            ExcelColumn.of("MMSI", VesselVO::getMmsi),
+            ExcelColumn.of("IMO", VesselVO::getImo),
+            ExcelColumn.of("呼号", VesselVO::getCallsign),
+            ExcelColumn.of("船型", VesselVO::getShiptype),
+            ExcelColumn.of("船旗国", VesselVO::getFlagState),
+            ExcelColumn.of("船东", VesselVO::getShipOwner),
+            ExcelColumn.of("船东代码", VesselVO::getShipOwnerCode),
+            ExcelColumn.of("管理公司", VesselVO::getShipManager),
+            ExcelColumn.of("管理公司代码", VesselVO::getShipManagerCode),
+            ExcelColumn.of("总吨", VesselVO::getGt),
+            ExcelColumn.of("净吨", VesselVO::getNt),
+            ExcelColumn.of("载重吨", VesselVO::getDwt),
+            ExcelColumn.of("长度", VesselVO::getLength),
+            ExcelColumn.of("宽度", VesselVO::getWidth),
+            ExcelColumn.of("建造年份", VesselVO::getBuildYear),
+            ExcelColumn.of("录入时间", VesselVO::getInsertTime),
+            ExcelColumn.of("更新时间", VesselVO::getUpdateTime)
+    );
+
     @Operation(summary = "分页查询船舶(可按船名/MMSI/IMO前缀搜索, 按船旗国/船型筛选)")
     @GetMapping
     public Result<PageResult<VesselVO>> page(VesselQueryReq req) {
         return Result.success(vesselService.page(req));
+    }
+
+    // ⚠️ /export 必须写在 /{id} **前面**。
+    @Operation(summary = "导出船舶为 Excel(筛选条件与列表一致, 不分页)")
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(VesselQueryReq req) {
+        List<VesselVO> rows = vesselService.listForExport(req);
+        byte[] body = excelExporter.toXlsx("船舶", EXPORT_COLUMNS, rows);
+        return ExcelResponse.of("vessels", body);
     }
 
     @Operation(summary = "船舶下拉框(给新增航次选船用: 船名/MMSI前缀, 返回船名+MMSI)")

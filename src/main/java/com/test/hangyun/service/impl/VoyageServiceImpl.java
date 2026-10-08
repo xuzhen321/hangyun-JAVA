@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.VoyageQueryReq;
 import com.test.hangyun.dto.VoyageReq;
@@ -12,9 +13,11 @@ import com.test.hangyun.dto.vo.VoyageVO;
 import com.test.hangyun.mapper.PortMapper;
 import com.test.hangyun.mapper.VesselMapper;
 import com.test.hangyun.mapper.VoyageMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Port;
 import com.test.hangyun.pojo.entity.Vessel;
 import com.test.hangyun.pojo.entity.Voyage;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.VoyageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,7 +28,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 
 /**
  * 航次管理。
@@ -52,19 +54,44 @@ public class VoyageServiceImpl implements VoyageService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<Voyage> w = buildWrapper(req);
+        // 最新录入的排最前(和其他业务实体一致)
+        w.orderByDesc(Voyage::getId);
+
+        Page<Voyage> p = voyageMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        return new PageResult<>(p.getTotal(), p.getCurrent(), p.getSize(), assemble(p.getRecords()));
+    }
+
+    @Override
+    @OpLog(module = "航次管理", table = "voyage", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<VoyageVO> listForExport(VoyageQueryReq req) {
+        LambdaQueryWrapper<Voyage> w = buildWrapper(req);
+        w.orderByDesc(Voyage::getId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<Voyage> rows = voyageMapper.selectList(w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return assemble(rows);
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<Voyage> buildWrapper(VoyageQueryReq req) {
         LambdaQueryWrapper<Voyage> w = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(req.getNo())) {
             w.likeRight(Voyage::getNo, req.getNo().trim());
         }
         w.eq(req.getLoadingPortId() != null, Voyage::getLoadingPortId, req.getLoadingPortId());
-        // 最新录入的排最前(和其他业务实体一致)
-        w.orderByDesc(Voyage::getId);
+        return w;
+    }
 
-        Page<Voyage> p = voyageMapper.selectPage(new Page<>(pageNo, pageSize), w);
-
-        Map<Long, String> portNames = findPortNames(collectPortIds(p.getRecords()));
-        Map<Long, String> vesselNames = findVesselNames(collectVesselIds(p.getRecords()));
-        return PageResult.of(p, (Function<Voyage, VoyageVO>) v -> toVO(v, portNames, vesselNames));
+    /** 列表和导出共用的组装: 批量查港口中文名和船名后回填 */
+    private List<VoyageVO> assemble(List<Voyage> records) {
+        Map<Long, String> portNames = findPortNames(collectPortIds(records));
+        Map<Long, String> vesselNames = findVesselNames(collectVesselIds(records));
+        return records.stream().map(v -> toVO(v, portNames, vesselNames)).toList();
     }
 
     @Override
@@ -75,6 +102,7 @@ public class VoyageServiceImpl implements VoyageService {
     }
 
     @Override
+    @OpLog(module = "航次管理", table = "voyage", type = OpType.INSERT, desc = "新增航次")
     @Transactional
     public void create(VoyageReq req) {
         validateReferences(req.getVslId(), req.getLoadingPortId(), req.getDischargePortId());
@@ -91,6 +119,7 @@ public class VoyageServiceImpl implements VoyageService {
     }
 
     @Override
+    @OpLog(module = "航次管理", table = "voyage", type = OpType.UPDATE, desc = "修改航次")
     @Transactional
     public void update(Long id, VoyageReq req) {
         getExisting(id);
@@ -110,6 +139,7 @@ public class VoyageServiceImpl implements VoyageService {
     }
 
     @Override
+    @OpLog(module = "航次管理", table = "voyage", type = OpType.DELETE, desc = "删除航次")
     @Transactional
     public void delete(Long id) {
         getExisting(id);

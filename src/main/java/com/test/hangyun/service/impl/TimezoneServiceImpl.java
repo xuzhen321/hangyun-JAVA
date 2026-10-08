@@ -10,8 +10,10 @@ import com.test.hangyun.dto.TimezoneQueryReq;
 import com.test.hangyun.dto.TimezoneReq;
 import com.test.hangyun.dto.vo.TimezoneOptionVO;
 import com.test.hangyun.dto.vo.TimezoneVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.TimezoneMapper;
 import com.test.hangyun.pojo.entity.Timezone;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.TimezoneService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -57,6 +59,7 @@ public class TimezoneServiceImpl implements TimezoneService {
                 .stream().map(TimezoneOptionVO::from).toList();
     }
 
+    @OpLog(module = "时区字典", table = "timezone", type = OpType.INSERT, desc = "新增时区")
     @Override
     @Transactional
     public void create(TimezoneReq req) {
@@ -70,6 +73,7 @@ public class TimezoneServiceImpl implements TimezoneService {
         timezoneMapper.insert(e);
     }
 
+    @OpLog(module = "时区字典", table = "timezone", type = OpType.UPDATE, desc = "修改时区")
     @Override
     @Transactional
     public void update(Long id, TimezoneReq req) {
@@ -86,6 +90,7 @@ public class TimezoneServiceImpl implements TimezoneService {
         timezoneMapper.update(null, u);
     }
 
+    @OpLog(module = "时区字典", table = "timezone", type = OpType.DELETE, desc = "删除时区")
     @Override
     @Transactional
     public void delete(Long id) {

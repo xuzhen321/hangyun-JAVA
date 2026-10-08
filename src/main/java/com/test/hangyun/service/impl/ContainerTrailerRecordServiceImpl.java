@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.ContainerStatusConstants;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.ContainerTrailerRecordQueryReq;
 import com.test.hangyun.dto.ContainerTrailerRecordReq;
@@ -15,7 +16,9 @@ import com.test.hangyun.mapper.ContainerTrailerRecordMapper;
 import com.test.hangyun.mapper.TrailerMapper;
 import com.test.hangyun.pojo.entity.Container;
 import com.test.hangyun.pojo.entity.ContainerTrailerRecord;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Trailer;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.ContainerTrailerRecordService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,7 +29,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 
 /**
  * 提空箱登记（集装箱拖车记录）。
@@ -50,6 +52,32 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<ContainerTrailerRecord> w = buildWrapper(req);
+        w.orderByDesc(ContainerTrailerRecord::getDcInDate);
+
+        Page<ContainerTrailerRecord> p = recordMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        // 回填司机姓名: 收集当前页的拖车号, 一次查出来(不是每行查一次)
+        return new PageResult<>(p.getTotal(), p.getCurrent(), p.getSize(), assemble(p.getRecords()));
+    }
+
+    @Override
+    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<ContainerTrailerRecordVO> listForExport(ContainerTrailerRecordQueryReq req) {
+        LambdaQueryWrapper<ContainerTrailerRecord> w = buildWrapper(req);
+        w.orderByDesc(ContainerTrailerRecord::getDcInDate);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<ContainerTrailerRecord> rows = recordMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return assemble(rows);
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<ContainerTrailerRecord> buildWrapper(ContainerTrailerRecordQueryReq req) {
         LambdaQueryWrapper<ContainerTrailerRecord> w = new LambdaQueryWrapper<>();
         // 箱号和拖车号都是用户会输前几位的业务编码, 用前缀匹配
         if (StringUtils.hasText(req.getContainerNo())) {
@@ -63,14 +91,15 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
                 ContainerTrailerRecord::getDcInDate, req.getDcInDateFrom());
         w.le(req.getDcInDateTo() != null,
                 ContainerTrailerRecord::getDcInDate, req.getDcInDateTo());
-        w.orderByDesc(ContainerTrailerRecord::getDcInDate);
+        return w;
+    }
 
-        Page<ContainerTrailerRecord> p = recordMapper.selectPage(new Page<>(pageNo, pageSize), w);
-
-        // 回填司机姓名: 收集当前页的拖车号, 一次查出来(不是每行查一次)
-        Map<String, String> driverNames = findDriverNames(collectTrackNos(p.getRecords()));
-        return PageResult.of(p, (Function<ContainerTrailerRecord, ContainerTrailerRecordVO>)
-                r -> ContainerTrailerRecordVO.from(r, driverNames.get(r.getTrackNo())));
+    /** 列表和导出共用的组装: 批量查司机姓名后回填 */
+    private List<ContainerTrailerRecordVO> assemble(List<ContainerTrailerRecord> records) {
+        Map<String, String> driverNames = findDriverNames(collectTrackNos(records));
+        return records.stream()
+                .map(r -> ContainerTrailerRecordVO.from(r, driverNames.get(r.getTrackNo())))
+                .toList();
     }
 
     @Override
@@ -81,6 +110,7 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
+    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.INSERT, desc = "新增提空箱登记")
     @Transactional
     public void create(ContainerTrailerRecordReq req) {
         String containerNo = req.getContainerNo().trim();
@@ -99,6 +129,7 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
+    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.UPDATE, desc = "修改提空箱记录")
     @Transactional
     public void update(Long id, ContainerTrailerRecordReq req) {
         getExisting(id);
@@ -120,6 +151,7 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
+    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.DELETE, desc = "删除提空箱记录")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -128,6 +160,7 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
+    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.DELETE, desc = "批量删除提空箱记录")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能传进重复的 id

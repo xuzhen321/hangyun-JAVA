@@ -17,6 +17,9 @@ public interface PortService {
     /** 分页查询, 支持按五字码/中英文名前缀搜索、按国家筛选 */
     PageResult<PortVO> page(PortQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<PortVO> listForExport(PortQueryReq req);
+
     /** 详情 */
     PortVO getById(Long id);
 

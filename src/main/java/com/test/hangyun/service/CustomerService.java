@@ -14,6 +14,9 @@ public interface CustomerService {
     /** 分页查询(读视图 v_customer) */
     PageResult<CustomerVO> page(CustomerQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<CustomerVO> listForExport(CustomerQueryReq req);
+
     /** 详情(读视图 v_customer) */
     CustomerVO getById(Long id);
 

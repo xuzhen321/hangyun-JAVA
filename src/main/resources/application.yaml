@@ -28,3 +28,17 @@ server:
 logging:
   level:
     com.test.hangyun: debug
+
+# =====================================================================
+#  登录令牌(JWT)
+# =====================================================================
+#  ⚠️ 下面这个 secret 是**演示用的默认值**, 生产环境必须通过环境变量覆盖:
+#         set HANGYUN_JWT_SECRET=<你自己的随机串>       (Windows)
+#         export HANGYUN_JWT_SECRET=<你自己的随机串>     (Linux/Mac)
+#  ⚠️ 长度必须 >= 32 字节 —— HMAC-SHA256 要求密钥不短于摘要长度,
+#     短了 jjwt 会在**签发时**直接抛 WeakKeyException(启动不报错, 一登录就炸)。
+hangyun:
+  jwt:
+    secret: ${HANGYUN_JWT_SECRET:hangyun-demo-jwt-secret-please-change-in-production-2026}
+    # 令牌有效期(分钟)。过期后接口返回 401 + code=0, 前端跳登录页
+    expire-minutes: 120

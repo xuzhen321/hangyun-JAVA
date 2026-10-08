@@ -12,8 +12,10 @@ import com.test.hangyun.dto.TrailerQueryReq;
 import com.test.hangyun.dto.TrailerUpdateReq;
 import com.test.hangyun.dto.vo.TrailerOptionVO;
 import com.test.hangyun.dto.vo.TrailerVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.TrailerMapper;
 import com.test.hangyun.pojo.entity.Trailer;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.TrailerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -64,6 +66,7 @@ public class TrailerServiceImpl implements TrailerService {
                 .getRecords().stream().map(TrailerOptionVO::from).toList();
     }
 
+    @OpLog(module = "拖车管理", table = "trailer", type = OpType.INSERT, desc = "新增拖车")
     @Override
     @Transactional
     public void create(TrailerCreateReq req) {
@@ -81,6 +84,7 @@ public class TrailerServiceImpl implements TrailerService {
         trailerMapper.insert(e);
     }
 
+    @OpLog(module = "拖车管理", table = "trailer", type = OpType.UPDATE, desc = "修改拖车")
     @Override
     @Transactional
     public void update(String no, TrailerUpdateReq req) {
@@ -94,6 +98,7 @@ public class TrailerServiceImpl implements TrailerService {
         trailerMapper.update(null, u);
     }
 
+    @OpLog(module = "拖车管理", table = "trailer", type = OpType.DELETE, desc = "删除拖车")
     @Override
     @Transactional
     public void delete(String no) {

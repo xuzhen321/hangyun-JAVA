@@ -14,6 +14,9 @@ public interface ContainerService {
     /** 分页查询, 支持按箱号前缀、状态精确筛选 */
     PageResult<ContainerVO> page(ContainerQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<ContainerVO> listForExport(ContainerQueryReq req);
+
     /** 详情 */
     ContainerVO getById(String no);
 

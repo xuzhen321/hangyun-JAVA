@@ -11,8 +11,10 @@ import com.test.hangyun.dto.ContainerStatusQueryReq;
 import com.test.hangyun.dto.ContainerStatusReq;
 import com.test.hangyun.dto.vo.ContainerStatusOptionVO;
 import com.test.hangyun.dto.vo.ContainerStatusVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.ContainerStatusMapper;
 import com.test.hangyun.pojo.entity.ContainerStatus;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.ContainerStatusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -62,6 +64,7 @@ public class ContainerStatusServiceImpl implements ContainerStatusService {
                 .stream().map(ContainerStatusOptionVO::from).toList();
     }
 
+    @OpLog(module = "集装箱状态", table = "container_status", type = OpType.INSERT, desc = "新增集装箱状态")
     @Override
     @Transactional
     public void create(ContainerStatusReq req) {
@@ -76,6 +79,7 @@ public class ContainerStatusServiceImpl implements ContainerStatusService {
         containerStatusMapper.insert(e);
     }
 
+    @OpLog(module = "集装箱状态", table = "container_status", type = OpType.UPDATE, desc = "修改集装箱状态")
     @Override
     @Transactional
     public void update(Long id, ContainerStatusReq req) {
@@ -96,6 +100,7 @@ public class ContainerStatusServiceImpl implements ContainerStatusService {
         containerStatusMapper.update(null, u);
     }
 
+    @OpLog(module = "集装箱状态", table = "container_status", type = OpType.DELETE, desc = "删除集装箱状态")
     @Override
     @Transactional
     public void delete(Long id) {

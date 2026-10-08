@@ -12,6 +12,9 @@ public interface CargoContainerResultService {
     /** 分页查询, 支持按货物名称(前缀)、订单号(精确)、集装箱号(精确)筛选 */
     PageResult<CargoContainerResultVO> page(CargoContainerResultQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<CargoContainerResultVO> listForExport(CargoContainerResultQueryReq req);
+
     /** 详情 */
     CargoContainerResultVO getById(Long id);
 

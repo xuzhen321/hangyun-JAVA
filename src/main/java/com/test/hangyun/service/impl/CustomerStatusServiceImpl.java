@@ -10,7 +10,9 @@ import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerStatusQueryReq;
 import com.test.hangyun.dto.CustomerStatusReq;
 import com.test.hangyun.dto.vo.CustomerStatusVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.CustomerStatusMapper;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.entity.CustomerStatus;
 import com.test.hangyun.service.CustomerStatusService;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,7 @@ public class CustomerStatusServiceImpl implements CustomerStatusService {
 
     @Override
     @Transactional
+    @OpLog(module = "客户状态", table = "customer_status", type = OpType.INSERT, desc = "新增客户状态")
     public void create(CustomerStatusReq req) {
         String description = req.getDescription().trim();
         ensureDescriptionUnique(description, null);
@@ -64,6 +67,7 @@ public class CustomerStatusServiceImpl implements CustomerStatusService {
 
     @Override
     @Transactional
+    @OpLog(module = "客户状态", table = "customer_status", type = OpType.UPDATE, desc = "修改客户状态")
     public void update(Long id, CustomerStatusReq req) {
         // 内置状态(1正常/2异常/3注销)是系统基础数据, 一律不允许修改。
         // 这一条与库里存不存在无关, 所以放在存在性校验之前先挡掉。
@@ -84,6 +88,7 @@ public class CustomerStatusServiceImpl implements CustomerStatusService {
 
     @Override
     @Transactional
+    @OpLog(module = "客户状态", table = "customer_status", type = OpType.DELETE, desc = "删除客户状态")
     public void delete(Long id) {
         // 内置状态(1正常/2异常/3注销)是系统基础数据, 一律不允许删除。
         // 这一条与库里存不存在无关, 所以放在存在性校验之前先挡掉。

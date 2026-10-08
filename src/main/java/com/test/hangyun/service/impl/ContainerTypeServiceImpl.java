@@ -10,8 +10,10 @@ import com.test.hangyun.dto.ContainerTypeQueryReq;
 import com.test.hangyun.dto.ContainerTypeReq;
 import com.test.hangyun.dto.vo.ContainerTypeOptionVO;
 import com.test.hangyun.dto.vo.ContainerTypeVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.ContainerTypeMapper;
 import com.test.hangyun.pojo.entity.ContainerType;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.ContainerTypeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -57,6 +59,7 @@ public class ContainerTypeServiceImpl implements ContainerTypeService {
                 .stream().map(ContainerTypeOptionVO::from).toList();
     }
 
+    @OpLog(module = "集装箱箱型", table = "container_type", type = OpType.INSERT, desc = "新增集装箱箱型")
     @Override
     @Transactional
     public void create(ContainerTypeReq req) {
@@ -67,6 +70,7 @@ public class ContainerTypeServiceImpl implements ContainerTypeService {
         containerTypeMapper.insert(e);
     }
 
+    @OpLog(module = "集装箱箱型", table = "container_type", type = OpType.UPDATE, desc = "修改集装箱箱型")
     @Override
     @Transactional
     public void update(Long id, ContainerTypeReq req) {
@@ -79,6 +83,7 @@ public class ContainerTypeServiceImpl implements ContainerTypeService {
         containerTypeMapper.update(null, u);
     }
 
+    @OpLog(module = "集装箱箱型", table = "container_type", type = OpType.DELETE, desc = "删除集装箱箱型")
     @Override
     @Transactional
     public void delete(Long id) {

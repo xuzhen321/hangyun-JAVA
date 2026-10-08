@@ -11,7 +11,9 @@ import com.test.hangyun.dto.EventStatusQueryReq;
 import com.test.hangyun.dto.EventStatusReq;
 import com.test.hangyun.dto.vo.EventStatusOptionVO;
 import com.test.hangyun.dto.vo.EventStatusVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.EventStatusMapper;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.entity.EventStatus;
 import com.test.hangyun.service.EventStatusService;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +63,7 @@ public class EventStatusServiceImpl implements EventStatusService {
 
     @Override
     @Transactional
+    @OpLog(module = "事件状态", table = "event_status", type = OpType.INSERT, desc = "新增事件状态")
     public void create(EventStatusReq req) {
         String cn = req.getDescriptionCn().trim();
         String en = trimToNull(req.getDescriptionEn());
@@ -75,6 +78,7 @@ public class EventStatusServiceImpl implements EventStatusService {
 
     @Override
     @Transactional
+    @OpLog(module = "事件状态", table = "event_status", type = OpType.UPDATE, desc = "修改事件状态")
     public void update(Long id, EventStatusReq req) {
         // id=6「已删除」是内置状态, 不允许改描述 —— 事件的逻辑删除依赖它
         if (EventStatusConstants.isBuiltin(id)) {
@@ -95,6 +99,7 @@ public class EventStatusServiceImpl implements EventStatusService {
 
     @Override
     @Transactional
+    @OpLog(module = "事件状态", table = "event_status", type = OpType.DELETE, desc = "删除事件状态")
     public void delete(Long id) {
         // id=6「已删除」是内置状态, 一律不允许删除
         if (EventStatusConstants.isBuiltin(id)) {

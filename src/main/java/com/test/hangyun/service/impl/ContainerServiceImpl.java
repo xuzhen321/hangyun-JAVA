@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.ContainerStatusConstants;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.ContainerCreateReq;
@@ -20,7 +21,9 @@ import com.test.hangyun.mapper.ContainerTypeMapper;
 import com.test.hangyun.pojo.entity.Company;
 import com.test.hangyun.pojo.entity.Container;
 import com.test.hangyun.pojo.entity.ContainerStatus;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.ContainerType;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.ContainerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -60,6 +63,32 @@ public class ContainerServiceImpl implements ContainerService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<Container> w = buildWrapper(req);
+        w.orderByAsc(Container::getNo);
+
+        Page<Container> p = containerMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        // 把当前页用到的箱型/公司/状态一次查出来, 回填到 VO(三组 id 三组查询, 不是每行一次)
+        return new PageResult<>(p.getTotal(), p.getCurrent(), p.getSize(), assemble(p.getRecords()));
+    }
+
+    @Override
+    @OpLog(module = "集装箱", table = "container", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<ContainerVO> listForExport(ContainerQueryReq req) {
+        LambdaQueryWrapper<Container> w = buildWrapper(req);
+        w.orderByAsc(Container::getNo);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<Container> rows = containerMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return assemble(rows);
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<Container> buildWrapper(ContainerQueryReq req) {
         LambdaQueryWrapper<Container> w = new LambdaQueryWrapper<>();
         // 箱号是定长业务编码(如 SEGU9481570), 常用前缀筛出某个箱主的箱子
         if (StringUtils.hasText(req.getNo())) {
@@ -78,19 +107,18 @@ public class ContainerServiceImpl implements ContainerService {
         // 箱主 / 操作方都是 company 表, 但它们是两个独立字段, 所以两个条件各查各的
         w.eq(req.getOwnerId() != null, Container::getOwnerId, req.getOwnerId());
         w.eq(req.getOperatorId() != null, Container::getOperatorId, req.getOperatorId());
+        return w;
+    }
 
-        w.orderByAsc(Container::getNo);
-
-        Page<Container> p = containerMapper.selectPage(new Page<>(pageNo, pageSize), w);
-
-        // 把当前页用到的箱型/公司/状态一次查出来, 回填到 VO(三组 id 三组查询, 不是每行一次)
-        Map<Long, ContainerType> types = findTypes(collect(p.getRecords(), Container::getTypeId));
+    /** 列表和导出共用的组装: 批量查箱型/公司/状态后回填 */
+    private List<ContainerVO> assemble(List<Container> records) {
+        Map<Long, ContainerType> types = findTypes(collect(records, Container::getTypeId));
         Map<Long, String> companies = findCompanyNames(
-                collect(p.getRecords(), Container::getOwnerId, Container::getOperatorId));
+                collect(records, Container::getOwnerId, Container::getOperatorId));
         Map<Long, String> statuses = findStatusDescriptions(
-                collect(p.getRecords(), Container::getStatusId));
+                collect(records, Container::getStatusId));
 
-        return PageResult.of(p, (Function<Container, ContainerVO>) c -> {
+        return records.stream().map(c -> {
             ContainerVO vo = ContainerVO.from(c);
             ContainerType t = types.get(c.getTypeId());
             if (t != null) {
@@ -101,7 +129,7 @@ public class ContainerServiceImpl implements ContainerService {
             vo.setOperatorName(companies.get(c.getOperatorId()));
             vo.setStatusDescription(statuses.get(c.getStatusId()));
             return vo;
-        });
+        }).toList();
     }
 
     @Override
@@ -150,6 +178,7 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
+    @OpLog(module = "集装箱", table = "container", type = OpType.INSERT, desc = "新增集装箱")
     @Transactional
     public void create(ContainerCreateReq req) {
         String no = req.getNo().trim();
@@ -169,6 +198,7 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
+    @OpLog(module = "集装箱", table = "container", type = OpType.UPDATE, desc = "修改集装箱")
     @Transactional
     public void update(String no, ContainerUpdateReq req) {
         getExisting(no);
@@ -192,6 +222,7 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
+    @OpLog(module = "集装箱", table = "container", type = OpType.DELETE, desc = "删除集装箱")
     @Transactional
     public void delete(String no) {
         getExisting(no);
@@ -206,6 +237,7 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
+    @OpLog(module = "集装箱", table = "container", type = OpType.DELETE, desc = "批量删除集装箱")
     @Transactional
     public void deleteBatch(List<String> nos) {
         // 去重: 前端多选时可能传进重复的箱号

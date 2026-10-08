@@ -12,6 +12,9 @@ public interface ContainerTrailerRecordService {
     /** 分页查询, 支持按箱号/拖车号前缀、进场时间区间筛选 */
     PageResult<ContainerTrailerRecordVO> page(ContainerTrailerRecordQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<ContainerTrailerRecordVO> listForExport(ContainerTrailerRecordQueryReq req);
+
     /** 详情 */
     ContainerTrailerRecordVO getById(Long id);
 

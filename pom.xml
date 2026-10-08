@@ -83,6 +83,52 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- ================= 以下为"登录鉴权 + 操作日志导出"新增 ================= -->
+
+        <!--
+          Apache POI: 导出 Excel(.xlsx)。
+          选它而不是 EasyExcel/FastExcel: POI 是**纯 Java 库**, 不依赖 Spring,
+          所以不受本项目 Spring Boot 4.1.1 的版本兼容问题影响(见设计文档 1.2 的版本警告)。
+          流式写用它的 SXSSFWorkbook。
+        -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.3.0</version>
+        </dependency>
+
+        <!--
+          jjwt: 签发/校验 JWT。0.12.x 的 API 与 0.11.x 完全不同(别再照抄老写法)。
+          api 编译期可见, impl/jackson 只在运行期需要。
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+          密码哈希(BCrypt)。**只引 spring-security-crypto 这一个模块**, 不引
+          spring-boot-starter-security —— 后者会自带一整条过滤器链, 把现有接口全拦下来,
+          而我们只要 BCrypt 这一个工具类。版本交给 Spring Boot BOM 管理。
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

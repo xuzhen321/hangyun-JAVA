@@ -14,6 +14,9 @@ public interface VesselService {
     /** 分页查询, 支持按船名/MMSI/IMO 前缀搜索、按船旗国/船型精确筛选 */
     PageResult<VesselVO> page(VesselQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<VesselVO> listForExport(VesselQueryReq req);
+
     /** 详情 */
     VesselVO getById(Long id);
 

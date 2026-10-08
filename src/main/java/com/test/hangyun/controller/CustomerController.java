@@ -10,12 +10,16 @@ import com.test.hangyun.dto.CustomerUpdateReq;
 import com.test.hangyun.dto.vo.CustomerOptionVO;
 import com.test.hangyun.dto.vo.CustomerVO;
 import com.test.hangyun.dto.vo.OrderVO;
+import com.test.hangyun.excel.ExcelColumn;
+import com.test.hangyun.excel.ExcelExporter;
+import com.test.hangyun.excel.ExcelResponse;
 import com.test.hangyun.service.CustomerService;
 import com.test.hangyun.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,10 +47,38 @@ public class CustomerController {
      */
     private final OrderService orderService;
 
+    private final ExcelExporter excelExporter;
+
+    /**
+     * 导出列。**表头与列表页一致**, 且字典编码要翻成中文:
+     * {@code status} 库里是状态 id, 导出写"状态中文描述", 导出的 Excel 是给人看的。
+     */
+    private static final List<ExcelColumn<CustomerVO>> EXPORT_COLUMNS = List.of(
+            ExcelColumn.of("客户ID", CustomerVO::getId),
+            ExcelColumn.of("客户名称", CustomerVO::getName),
+            ExcelColumn.of("电话", CustomerVO::getPhone),
+            ExcelColumn.of("邮箱", CustomerVO::getEmail),
+            ExcelColumn.of("地址", CustomerVO::getAddress),
+            ExcelColumn.of("资质信息", CustomerVO::getQualification),
+            ExcelColumn.of("资质有效期", CustomerVO::getQualificationValidTo),
+            ExcelColumn.of("状态", CustomerVO::getStatusDescription),
+            ExcelColumn.of("录入时间", CustomerVO::getInsertTime),
+            ExcelColumn.of("更新时间", CustomerVO::getUpdateTime)
+    );
+
     @Operation(summary = "分页查询客户")
     @GetMapping
     public Result<PageResult<CustomerVO>> page(CustomerQueryReq req) {
         return Result.success(customerService.page(req));
+    }
+
+    // ⚠️ /export 必须写在 /{id} **前面**。
+    @Operation(summary = "导出客户为 Excel(筛选条件与列表一致, 不分页)")
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(CustomerQueryReq req) {
+        List<CustomerVO> rows = customerService.listForExport(req);
+        byte[] body = excelExporter.toXlsx("客户", EXPORT_COLUMNS, rows);
+        return ExcelResponse.of("customers", body);
     }
 
     @Operation(summary = "搜索客户(下拉框用: 姓名前缀, 最多 20 条, 只返回 id/姓名/电话)")

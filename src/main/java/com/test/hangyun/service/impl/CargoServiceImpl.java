@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CargoCreateReq;
@@ -15,8 +16,10 @@ import com.test.hangyun.dto.vo.CargoVO;
 import com.test.hangyun.mapper.CargoMapper;
 import com.test.hangyun.mapper.CargoTypeMapper;
 import com.test.hangyun.mapper.OrderMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Cargo;
 import com.test.hangyun.pojo.entity.CargoType;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.CargoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,7 +29,6 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -54,21 +56,7 @@ public class CargoServiceImpl implements CargoService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
-        LambdaQueryWrapper<Cargo> w = new LambdaQueryWrapper<>();
-
-        // 第一步: 货物名称在 cargo_type 上, 先按前缀把种类 id 查出来
-        if (StringUtils.hasText(req.getCargoTypeName())) {
-            List<Long> typeIds = findCargoTypeIdsByNamePrefix(req.getCargoTypeName().trim());
-            if (typeIds.isEmpty()) {
-                // 没有任何种类匹配这个前缀, 结果必然为空, 直接短路。
-                // 这同时也避开了一个坑: 空集合传给 MP 的 in() 会拼出 "IN ()", 是非法 SQL。
-                return new PageResult<>(0, pageNo, pageSize, List.of());
-            }
-            w.in(Cargo::getCargoTypeId, typeIds);
-        }
-
-        // 订单号是标识符, 用精确匹配
-        w.eq(StringUtils.hasText(req.getOrderId()), Cargo::getOrderId, req.getOrderId());
+        LambdaQueryWrapper<Cargo> w = buildWrapper(req);
 
         // 按 id 升序: 这是订单下的明细行, 按录入顺序展示更自然也稳定
         // (客户、订单那种顶层业务列表才用"最新在前")
@@ -77,9 +65,53 @@ public class CargoServiceImpl implements CargoService {
         Page<Cargo> p = cargoMapper.selectPage(new Page<>(pageNo, pageSize), w);
 
         // 第二步: 把当前页用到的货物种类名称一次查出来, 回填到 VO
-        Map<Long, String> typeNames = findTypeNames(collectTypeIds(p.getRecords()));
-        return PageResult.of(p, (Function<Cargo, CargoVO>)
-                c -> CargoVO.from(c, typeNames.get(c.getCargoTypeId())));
+        return new PageResult<>(p.getTotal(), p.getCurrent(), p.getSize(), assemble(p.getRecords()));
+    }
+
+    @Override
+    @OpLog(module = "订单货物", table = "cargo", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<CargoVO> listForExport(CargoQueryReq req) {
+        LambdaQueryWrapper<Cargo> w = buildWrapper(req);
+        w.orderByAsc(Cargo::getId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<Cargo> rows = cargoMapper.selectList(w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return assemble(rows);
+    }
+
+    /**
+     * 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么"。
+     */
+    private LambdaQueryWrapper<Cargo> buildWrapper(CargoQueryReq req) {
+        LambdaQueryWrapper<Cargo> w = new LambdaQueryWrapper<>();
+
+        // 第一步: 货物名称在 cargo_type 上, 先按前缀把种类 id 查出来
+        if (StringUtils.hasText(req.getCargoTypeName())) {
+            List<Long> typeIds = findCargoTypeIdsByNamePrefix(req.getCargoTypeName().trim());
+            if (typeIds.isEmpty()) {
+                // 没有任何种类匹配这个前缀, 结果必然为空。用恒假条件表达"空结果",
+                // 让列表和导出共用同一个 wrapper —— 空集合传给 MP 的 in() 会拼出 "IN ()", 是非法 SQL。
+                w.apply("1 = 0");
+                return w;
+            }
+            w.in(Cargo::getCargoTypeId, typeIds);
+        }
+
+        // 订单号是标识符, 用精确匹配
+        w.eq(StringUtils.hasText(req.getOrderId()), Cargo::getOrderId, req.getOrderId());
+        return w;
+    }
+
+    /** 列表和导出共用的组装: 把这批 cargo 用到的货物种类名称一次查出后回填 */
+    private List<CargoVO> assemble(List<Cargo> records) {
+        Map<Long, String> typeNames = findTypeNames(collectTypeIds(records));
+        return records.stream()
+                .map(c -> CargoVO.from(c, typeNames.get(c.getCargoTypeId())))
+                .toList();
     }
 
     @Override
@@ -108,6 +140,7 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
+    @OpLog(module = "订单货物", table = "cargo", type = OpType.INSERT, desc = "新增订单货物")
     @Transactional
     public void create(CargoCreateReq req) {
         // 先 trim 再校验: 订单号常从页面上复制粘贴, 首尾可能带空格。
@@ -125,6 +158,7 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
+    @OpLog(module = "订单货物", table = "cargo", type = OpType.UPDATE, desc = "修改订单货物")
     @Transactional
     public void update(Long id, CargoUpdateReq req) {
         getExisting(id);
@@ -140,6 +174,7 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
+    @OpLog(module = "订单货物", table = "cargo", type = OpType.DELETE, desc = "删除订单货物")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -151,6 +186,7 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
+    @OpLog(module = "订单货物", table = "cargo", type = OpType.DELETE, desc = "批量删除订单货物")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能传进重复的 id

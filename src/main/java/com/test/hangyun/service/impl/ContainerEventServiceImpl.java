@@ -7,6 +7,7 @@ import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.ContainerStatusConstants;
 import com.test.hangyun.constant.EventStatusConstants;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.ContainerEventQueryReq;
 import com.test.hangyun.dto.ContainerEventReq;
@@ -17,8 +18,10 @@ import com.test.hangyun.mapper.ContainerMapper;
 import com.test.hangyun.mapper.EventStatusMapper;
 import com.test.hangyun.mapper.PortMapper;
 import com.test.hangyun.mapper.VoyageMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Container;
 import com.test.hangyun.pojo.entity.ContainerEvent;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.view.ContainerEventView;
 import com.test.hangyun.service.ContainerEventService;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +57,33 @@ public class ContainerEventServiceImpl implements ContainerEventService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<ContainerEventView> w = buildWrapper(req);
+        // 列表里最近发生的排最前
+        w.orderByDesc(ContainerEventView::getEventTime);
+
+        Page<ContainerEventView> p =
+                containerEventViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        return PageResult.of(p, ContainerEventVO::from);
+    }
+
+    @Override
+    @OpLog(module = "物流事件", table = "container_event", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<ContainerEventVO> listForExport(ContainerEventQueryReq req) {
+        LambdaQueryWrapper<ContainerEventView> w = buildWrapper(req);
+        w.orderByDesc(ContainerEventView::getEventTime);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<ContainerEventView> rows = containerEventViewMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return rows.stream().map(ContainerEventVO::from).toList();
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<ContainerEventView> buildWrapper(ContainerEventQueryReq req) {
         LambdaQueryWrapper<ContainerEventView> w = new LambdaQueryWrapper<>();
 
         // 箱号是标识符, 用精确匹配(也正好走 container_event 上已有的外键索引)。
@@ -74,12 +104,7 @@ public class ContainerEventServiceImpl implements ContainerEventService {
                 ContainerEventView::getEventTime, req.getEventTimeTo());
 
         excludeDeleted(w);
-        // 列表里最近发生的排最前
-        w.orderByDesc(ContainerEventView::getEventTime);
-
-        Page<ContainerEventView> p =
-                containerEventViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
-        return PageResult.of(p, ContainerEventVO::from);
+        return w;
     }
 
     @Override
@@ -123,6 +148,7 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
+    @OpLog(module = "物流事件", table = "container_event", type = OpType.INSERT, desc = "新增物流事件")
     @Transactional
     public void create(ContainerEventReq req) {
         String containerNo = req.getContainerNo().trim();
@@ -144,6 +170,7 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
+    @OpLog(module = "物流事件", table = "container_event", type = OpType.UPDATE, desc = "修改物流事件")
     @Transactional
     public void update(Long id, ContainerEventReq req) {
         getExisting(id);
@@ -167,6 +194,7 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
+    @OpLog(module = "物流事件", table = "container_event", type = OpType.DELETE, desc = "删除物流事件")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -179,6 +207,7 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
+    @OpLog(module = "物流事件", table = "container_event", type = OpType.DELETE, desc = "批量删除物流事件")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         List<Long> distinctIds = ids.stream().distinct().toList();

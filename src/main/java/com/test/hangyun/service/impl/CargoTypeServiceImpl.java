@@ -10,8 +10,10 @@ import com.test.hangyun.dto.CargoTypeQueryReq;
 import com.test.hangyun.dto.CargoTypeReq;
 import com.test.hangyun.dto.vo.CargoTypeOptionVO;
 import com.test.hangyun.dto.vo.CargoTypeVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.CargoTypeMapper;
 import com.test.hangyun.pojo.entity.CargoType;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.CargoTypeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -70,6 +72,7 @@ public class CargoTypeServiceImpl implements CargoTypeService {
                 .toList();
     }
 
+    @OpLog(module = "货物种类", table = "cargo_type", type = OpType.INSERT, desc = "新增货物种类")
     @Override
     @Transactional
     public void create(CargoTypeReq req) {
@@ -82,6 +85,7 @@ public class CargoTypeServiceImpl implements CargoTypeService {
         cargoTypeMapper.insert(e);
     }
 
+    @OpLog(module = "货物种类", table = "cargo_type", type = OpType.UPDATE, desc = "修改货物种类")
     @Override
     @Transactional
     public void update(Long id, CargoTypeReq req) {
@@ -99,6 +103,7 @@ public class CargoTypeServiceImpl implements CargoTypeService {
         cargoTypeMapper.update(null, u);
     }
 
+    @OpLog(module = "货物种类", table = "cargo_type", type = OpType.DELETE, desc = "删除货物种类")
     @Override
     @Transactional
     public void delete(Long id) {
@@ -110,6 +115,7 @@ public class CargoTypeServiceImpl implements CargoTypeService {
         cargoTypeMapper.deleteById(id);
     }
 
+    @OpLog(module = "货物种类", table = "cargo_type", type = OpType.DELETE, desc = "批量删除货物种类")
     @Override
     @Transactional
     public void deleteBatch(List<Long> ids) {

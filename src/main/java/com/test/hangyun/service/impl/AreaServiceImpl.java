@@ -10,8 +10,10 @@ import com.test.hangyun.dto.AreaQueryReq;
 import com.test.hangyun.dto.AreaReq;
 import com.test.hangyun.dto.vo.AreaOptionVO;
 import com.test.hangyun.dto.vo.AreaVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.AreaMapper;
 import com.test.hangyun.pojo.entity.Area;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.AreaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -53,6 +55,7 @@ public class AreaServiceImpl implements AreaService {
                 .stream().map(AreaOptionVO::from).toList();
     }
 
+    @OpLog(module = "区域字典", table = "area", type = OpType.INSERT, desc = "新增区域")
     @Override
     @Transactional
     public void create(AreaReq req) {
@@ -64,6 +67,7 @@ public class AreaServiceImpl implements AreaService {
         areaMapper.insert(e);
     }
 
+    @OpLog(module = "区域字典", table = "area", type = OpType.UPDATE, desc = "修改区域")
     @Override
     @Transactional
     public void update(Long id, AreaReq req) {
@@ -76,6 +80,7 @@ public class AreaServiceImpl implements AreaService {
         areaMapper.update(null, u);
     }
 
+    @OpLog(module = "区域字典", table = "area", type = OpType.DELETE, desc = "删除区域")
     @Override
     @Transactional
     public void delete(Long id) {

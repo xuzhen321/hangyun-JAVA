@@ -10,7 +10,9 @@ import com.test.hangyun.dto.HarborSizeQueryReq;
 import com.test.hangyun.dto.HarborSizeReq;
 import com.test.hangyun.dto.vo.HarborSizeOptionVO;
 import com.test.hangyun.dto.vo.HarborSizeVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.HarborSizeMapper;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.entity.HarborSize;
 import com.test.hangyun.service.HarborSizeService;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +58,7 @@ public class HarborSizeServiceImpl implements HarborSizeService {
 
     @Override
     @Transactional
+    @OpLog(module = "港口尺寸", table = "harbor_size", type = OpType.INSERT, desc = "新增港口尺寸")
     public void create(HarborSizeReq req) {
         HarborSize e = new HarborSize();
         e.setSize(req.getSize().trim());
@@ -64,6 +67,7 @@ public class HarborSizeServiceImpl implements HarborSizeService {
 
     @Override
     @Transactional
+    @OpLog(module = "港口尺寸", table = "harbor_size", type = OpType.UPDATE, desc = "修改港口尺寸")
     public void update(Long id, HarborSizeReq req) {
         getExisting(id);
 
@@ -74,6 +78,7 @@ public class HarborSizeServiceImpl implements HarborSizeService {
 
     @Override
     @Transactional
+    @OpLog(module = "港口尺寸", table = "harbor_size", type = OpType.DELETE, desc = "删除港口尺寸")
     public void delete(Long id) {
         getExisting(id);
         long ports = harborSizeMapper.countPortsByHarborSizeId(id);

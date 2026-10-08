@@ -10,12 +10,16 @@ import com.test.hangyun.dto.vo.ContainerEventVO;
 import com.test.hangyun.dto.vo.ContainerOptionVO;
 import com.test.hangyun.dto.vo.ContainerSummaryVO;
 import com.test.hangyun.dto.vo.ContainerVO;
+import com.test.hangyun.excel.ExcelColumn;
+import com.test.hangyun.excel.ExcelExporter;
+import com.test.hangyun.excel.ExcelResponse;
 import com.test.hangyun.service.ContainerEventService;
 import com.test.hangyun.service.ContainerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,10 +51,41 @@ public class ContainerController {
      */
     private final ContainerEventService containerEventService;
 
+    private final ExcelExporter excelExporter;
+
+    /**
+     * 导出列。**表头用中文**, 状态导中文描述而不是状态 id,
+     * 两个标志位导"是"/"否"而不是 true/false。
+     */
+    private static final List<ExcelColumn<ContainerVO>> EXPORT_COLUMNS = List.of(
+            ExcelColumn.of("箱号", ContainerVO::getNo),
+            ExcelColumn.of("箱型", ContainerVO::getTypeName),
+            ExcelColumn.of("箱尺寸", ContainerVO::getTypeSize),
+            ExcelColumn.of("箱主", ContainerVO::getOwnerName),
+            ExcelColumn.of("操作方", ContainerVO::getOperatorName),
+            ExcelColumn.of("封号", ContainerVO::getSealNo),
+            ExcelColumn.of("状态", ContainerVO::getStatusDescription),
+            ExcelColumn.of("危险品", vo -> flagText(vo.getDangerFlag())),
+            ExcelColumn.of("海事标识", vo -> flagText(vo.getMaritimeFlag())),
+            ExcelColumn.of("承运人操作", ContainerVO::getCarrierOperate),
+            ExcelColumn.of("码头箱况", ContainerVO::getCtrStatusTerminal),
+            ExcelColumn.of("录入时间", ContainerVO::getInsertTime),
+            ExcelColumn.of("更新时间", ContainerVO::getUpdateTime)
+    );
+
     @Operation(summary = "分页查询集装箱(可按箱号前缀、状态精确筛选)")
     @GetMapping
     public Result<PageResult<ContainerVO>> page(ContainerQueryReq req) {
         return Result.success(containerService.page(req));
+    }
+
+    // ⚠️ /export 必须写在 /{no} **前面**。
+    @Operation(summary = "导出集装箱为 Excel(筛选条件与列表一致, 不分页)")
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(ContainerQueryReq req) {
+        List<ContainerVO> rows = containerService.listForExport(req);
+        byte[] body = excelExporter.toXlsx("集装箱", EXPORT_COLUMNS, rows);
+        return ExcelResponse.of("containers", body);
     }
 
     @Operation(summary = "集装箱轨迹(按箱号查全部物流事件, 按发生时间升序, 可直接画时间轴)")
@@ -107,5 +142,13 @@ public class ContainerController {
     public Result<Void> delete(@PathVariable String no) {
         containerService.delete(no);
         return Result.success();
+    }
+
+    /** 标志位转中文: true->是, false->否, null->空 */
+    private static String flagText(Boolean flag) {
+        if (flag == null) {
+            return null;
+        }
+        return flag ? "是" : "否";
     }
 }

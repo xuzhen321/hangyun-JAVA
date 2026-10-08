@@ -11,7 +11,9 @@ import com.test.hangyun.dto.CountryQueryReq;
 import com.test.hangyun.dto.CountryReq;
 import com.test.hangyun.dto.vo.CountryOptionVO;
 import com.test.hangyun.dto.vo.CountryVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.CountryMapper;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.entity.Country;
 import com.test.hangyun.service.CountryService;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +66,7 @@ public class CountryServiceImpl implements CountryService {
 
     @Override
     @Transactional
+    @OpLog(module = "国家字典", table = "country", type = OpType.INSERT, desc = "新增国家")
     public void create(CountryReq req) {
         String code = req.getCountryCode().trim();
         ensureCodeUnique(code, null);
@@ -78,6 +81,7 @@ public class CountryServiceImpl implements CountryService {
 
     @Override
     @Transactional
+    @OpLog(module = "国家字典", table = "country", type = OpType.UPDATE, desc = "修改国家")
     public void update(Long id, CountryReq req) {
         getExisting(id);
         String code = req.getCountryCode().trim();
@@ -94,6 +98,7 @@ public class CountryServiceImpl implements CountryService {
 
     @Override
     @Transactional
+    @OpLog(module = "国家字典", table = "country", type = OpType.DELETE, desc = "删除国家")
     public void delete(Long id) {
         getExisting(id);
 

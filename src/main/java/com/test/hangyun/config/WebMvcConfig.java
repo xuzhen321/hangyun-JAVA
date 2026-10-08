@@ -1,17 +1,20 @@
 package com.test.hangyun.config;
 
+import com.test.hangyun.auth.AuthInterceptor;
 import com.test.hangyun.constant.DateTimeConstants;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.time.LocalDateTime;
 
 /**
- * Web 层配置: 跨域 + URL 查询参数的类型转换。
+ * Web 层配置: 跨域 + 登录令牌拦截 + URL 查询参数的类型转换。
  * <p>
  * 跨域: 开发期前端从任意地址访问后端(不同 IP、不同端口)都会跨域, 这里一律放行。
  * 用 {@code allowedOriginPatterns("*")} 而不是 {@code allowedOrigins("*")},
@@ -20,7 +23,10 @@ import java.time.LocalDateTime;
  * 生产上线前应收紧 {@code allowedOriginPatterns}, 改成真实前端域名。
  */
 @Configuration
+@RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
+
+    private final AuthInterceptor authInterceptor;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -31,6 +37,34 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .allowCredentials(false)
                 // 预检请求结果缓存 1 小时, 减少 OPTIONS 往返
                 .maxAge(3600);
+    }
+
+    /**
+     * 登录令牌拦截: 除白名单外, 所有接口都要带 {@code Authorization: Bearer <token>}。
+     * <p>
+     * 白名单里每一项的理由:
+     * <ul>
+     *   <li>{@code /auth/login} —— 登录本身当然不能要求先登录(否则死锁)</li>
+     *   <li>Swagger 那几个路径 —— 不然打不开文档页, 而且它们会连带请求一堆静态资源</li>
+     *   <li>{@code /error} —— Spring Boot 的错误转发入口。不放行的话, 一个 404 会被
+     *       拦截器改写成 401, 排查问题时会被彻底带偏</li>
+     * </ul>
+     * <p>
+     * ⚠️ {@code /auth/logout} 和 {@code /auth/me} **不在白名单里** —— 它们本来就要求已登录。
+     */
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(authInterceptor)
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/auth/login",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**",
+                        "/swagger-resources/**",
+                        "/webjars/**",
+                        "/error"
+                );
     }
 
     /**

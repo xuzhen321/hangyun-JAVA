@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.CustomerStatusConstants;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerCreateReq;
@@ -16,7 +17,9 @@ import com.test.hangyun.dto.vo.CustomerVO;
 import com.test.hangyun.mapper.CustomerMapper;
 import com.test.hangyun.mapper.CustomerStatusMapper;
 import com.test.hangyun.mapper.CustomerViewMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Customer;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.view.CustomerView;
 import com.test.hangyun.service.CustomerService;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +49,37 @@ public class CustomerServiceImpl implements CustomerService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<CustomerView> w = buildWrapper(req);
+        // 最新录入的排在最前面
+        w.orderByDesc(CustomerView::getId);
+
+        Page<CustomerView> p = customerViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        return PageResult.of(p, CustomerVO::from);
+    }
+
+    @Override
+    @OpLog(module = "客户管理", table = "customer", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<CustomerVO> listForExport(CustomerQueryReq req) {
+        LambdaQueryWrapper<CustomerView> w = buildWrapper(req);
+        w.orderByDesc(CustomerView::getId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<CustomerView> rows = customerViewMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return rows.stream().map(CustomerVO::from).toList();
+    }
+
+    /**
+     * 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么"。
+     * <p>
+     * ⚠️ 每个带条件的 eq 都先把值算好再传: MyBatis-Plus 的 {@code eq(condition, column, value)}
+     * 中 Java 参数是急切求值的, 直接在参数位置写 {@code req.getX().trim()} 会在不传该参数时 NPE。
+     */
+    private LambdaQueryWrapper<CustomerView> buildWrapper(CustomerQueryReq req) {
         LambdaQueryWrapper<CustomerView> w = new LambdaQueryWrapper<>();
 
         // 前缀匹配, 不用 like('%%'): Customer 上的 name / qualification 是 btree 索引,
@@ -72,11 +106,7 @@ public class CustomerServiceImpl implements CustomerService {
             w.and(q -> q.ne(CustomerView::getStatus, CustomerStatusConstants.STATUS_CANCELLED)
                     .or().isNull(CustomerView::getStatus));
         }
-        // 最新录入的排在最前面
-        w.orderByDesc(CustomerView::getId);
-
-        Page<CustomerView> p = customerViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
-        return PageResult.of(p, CustomerVO::from);
+        return w;
     }
 
     @Override
@@ -89,6 +119,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @OpLog(module = "客户管理", table = "customer", type = OpType.INSERT, desc = "新增客户")
     @Transactional
     public void create(CustomerCreateReq req) {
         // 库里没有物理外键, 关联状态是否存在必须由应用层校验
@@ -108,6 +139,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @OpLog(module = "客户管理", table = "customer", type = OpType.UPDATE, desc = "修改客户")
     @Transactional
     public void update(Long id, CustomerUpdateReq req) {
         if (customerViewMapper.selectById(id) == null) {
@@ -131,6 +163,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @OpLog(module = "客户管理", table = "customer", type = OpType.DELETE, desc = "批量删除客户")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能因为交互传进重复的 id, 去重后 IN 里少几个参数
@@ -150,6 +183,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @OpLog(module = "客户管理", table = "customer", type = OpType.DELETE, desc = "删除客户")
     @Transactional
     public void delete(Long id) {
         if (customerViewMapper.selectById(id) == null) {

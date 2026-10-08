@@ -11,8 +11,10 @@ import com.test.hangyun.dto.CompanyQueryReq;
 import com.test.hangyun.dto.CompanyReq;
 import com.test.hangyun.dto.vo.CompanyOptionVO;
 import com.test.hangyun.dto.vo.CompanyVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.CompanyMapper;
 import com.test.hangyun.pojo.entity.Company;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.CompanyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -63,6 +65,7 @@ public class CompanyServiceImpl implements CompanyService {
                 .getRecords().stream().map(CompanyOptionVO::from).toList();
     }
 
+    @OpLog(module = "公司信息", table = "company", type = OpType.INSERT, desc = "新增公司")
     @Override
     @Transactional
     public void create(CompanyReq req) {
@@ -73,6 +76,7 @@ public class CompanyServiceImpl implements CompanyService {
         companyMapper.insert(e);
     }
 
+    @OpLog(module = "公司信息", table = "company", type = OpType.UPDATE, desc = "修改公司")
     @Override
     @Transactional
     public void update(Long id, CompanyReq req) {
@@ -85,6 +89,7 @@ public class CompanyServiceImpl implements CompanyService {
         companyMapper.update(null, u);
     }
 
+    @OpLog(module = "公司信息", table = "company", type = OpType.DELETE, desc = "删除公司")
     @Override
     @Transactional
     public void delete(Long id) {

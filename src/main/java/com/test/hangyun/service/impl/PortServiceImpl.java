@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.constant.PortConstants;
@@ -21,7 +22,9 @@ import com.test.hangyun.mapper.PortMapper;
 import com.test.hangyun.mapper.PortTypeMapper;
 import com.test.hangyun.mapper.PortViewMapper;
 import com.test.hangyun.mapper.TimezoneMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Port;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.view.PortView;
 import com.test.hangyun.service.PortService;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +61,31 @@ public class PortServiceImpl implements PortService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<PortView> w = buildWrapper(req);
+        w.orderByAsc(PortView::getPortId);
+
+        Page<PortView> p = portViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        return PageResult.of(p, PortVO::from);
+    }
+
+    @Override
+    @OpLog(module = "港口管理", table = "port", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<PortVO> listForExport(PortQueryReq req) {
+        LambdaQueryWrapper<PortView> w = buildWrapper(req);
+        w.orderByAsc(PortView::getPortId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<PortView> rows = portViewMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return rows.stream().map(PortVO::from).toList();
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<PortView> buildWrapper(PortQueryReq req) {
         LambdaQueryWrapper<PortView> w = new LambdaQueryWrapper<>();
         applyKeywordFilter(w, req.getKeyword());
         w.eq(req.getCountryId() != null, PortView::getCountryId, req.getCountryId());
@@ -66,10 +94,7 @@ public class PortServiceImpl implements PortService {
         // 会把 state 为空的行一并滤掉。下拉框那边本来就是这么写的, 两处口径要一致。
         w.and(q -> q.ne(PortView::getState, PortConstants.STATE_DELETED)
                 .or().isNull(PortView::getState));
-        w.orderByAsc(PortView::getPortId);
-
-        Page<PortView> p = portViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
-        return PageResult.of(p, PortVO::from);
+        return w;
     }
 
     @Override
@@ -95,6 +120,7 @@ public class PortServiceImpl implements PortService {
     }
 
     @Override
+    @OpLog(module = "港口管理", table = "port", type = OpType.INSERT, desc = "新增港口")
     @Transactional
     public void create(PortCreateReq req) {
         String unlocode = req.getUnlocode().trim();
@@ -123,6 +149,7 @@ public class PortServiceImpl implements PortService {
     }
 
     @Override
+    @OpLog(module = "港口管理", table = "port", type = OpType.UPDATE, desc = "修改港口")
     @Transactional
     public void update(Long id, PortUpdateReq req) {
         getExisting(id);
@@ -155,6 +182,7 @@ public class PortServiceImpl implements PortService {
     }
 
     @Override
+    @OpLog(module = "港口管理", table = "port", type = OpType.DELETE, desc = "删除港口")
     @Transactional
     public void delete(Long id) {
         getExisting(id);

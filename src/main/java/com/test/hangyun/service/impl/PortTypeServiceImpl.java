@@ -10,8 +10,10 @@ import com.test.hangyun.dto.PortTypeQueryReq;
 import com.test.hangyun.dto.PortTypeReq;
 import com.test.hangyun.dto.vo.PortTypeOptionVO;
 import com.test.hangyun.dto.vo.PortTypeVO;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.PortTypeMapper;
 import com.test.hangyun.pojo.entity.PortType;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.service.PortTypeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,7 @@ public class PortTypeServiceImpl implements PortTypeService {
                 .stream().map(PortTypeOptionVO::from).toList();
     }
 
+    @OpLog(module = "港口类型", table = "port_type", type = OpType.INSERT, desc = "新增港口类型")
     @Override
     @Transactional
     public void create(PortTypeReq req) {
@@ -62,6 +65,7 @@ public class PortTypeServiceImpl implements PortTypeService {
         portTypeMapper.insert(e);
     }
 
+    @OpLog(module = "港口类型", table = "port_type", type = OpType.UPDATE, desc = "修改港口类型")
     @Override
     @Transactional
     public void update(Long id, PortTypeReq req) {
@@ -72,6 +76,7 @@ public class PortTypeServiceImpl implements PortTypeService {
         portTypeMapper.update(null, u);
     }
 
+    @OpLog(module = "港口类型", table = "port_type", type = OpType.DELETE, desc = "删除港口类型")
     @Override
     @Transactional
     public void delete(Long id) {

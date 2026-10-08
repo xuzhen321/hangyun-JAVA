@@ -5,10 +5,15 @@ import com.test.hangyun.dto.VoyageQueryReq;
 import com.test.hangyun.dto.VoyageReq;
 import com.test.hangyun.dto.vo.VoyageVO;
 
+import java.util.List;
+
 public interface VoyageService {
 
     /** 分页查询, 支持按航次号前缀、起始港口筛选 */
     PageResult<VoyageVO> page(VoyageQueryReq req);
+
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<VoyageVO> listForExport(VoyageQueryReq req);
 
     /** 详情 */
     VoyageVO getById(Long id);

@@ -14,6 +14,9 @@ public interface CargoService {
     /** 分页查询, 支持按货物名称(前缀)和订单号(精确)筛选 */
     PageResult<CargoVO> page(CargoQueryReq req);
 
+    /** 按查询条件取不分页的全量列表, 供导出用。超过上限抛 400 */
+    List<CargoVO> listForExport(CargoQueryReq req);
+
     /**
      * 下拉框候选(给"新增装箱结果"选货物用): 最多 20 条, 只返回 id/货物名称/订单号/数量。
      * cargoTypeName 前缀匹配、orderId 精确匹配, 都可选。

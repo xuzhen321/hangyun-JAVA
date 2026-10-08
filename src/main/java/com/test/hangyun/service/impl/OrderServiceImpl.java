@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
+import com.test.hangyun.constant.ExportConstants;
 import com.test.hangyun.constant.OrderStatusConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.CustomerOrderQueryReq;
@@ -17,7 +18,9 @@ import com.test.hangyun.mapper.OrderMapper;
 import com.test.hangyun.mapper.OrderStatusMapper;
 import com.test.hangyun.mapper.OrderViewMapper;
 import com.test.hangyun.mapper.PortMapper;
+import com.test.hangyun.log.OpLog;
 import com.test.hangyun.pojo.entity.Order;
+import com.test.hangyun.pojo.enums.OpType;
 import com.test.hangyun.pojo.view.OrderView;
 import com.test.hangyun.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +54,34 @@ public class OrderServiceImpl implements OrderService {
         long pageNo = PageConstants.normalizePage(req.getPage());
         long pageSize = PageConstants.normalizeSize(req.getSize());
 
+        LambdaQueryWrapper<OrderView> w = buildWrapper(req);
+
+        // 订单号是雪花算法的 19 位数字串, 定长, 所以按字符串倒序等价于按时间倒序(最新在前)。
+        // 若将来订单号长度会变, 这里的字典序就不再等于数值序, 需要改成按 insert_time 排序。
+        w.orderByDesc(OrderView::getId);
+
+        Page<OrderView> p = orderViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
+        return PageResult.of(p, OrderVO::from);
+    }
+
+    @Override
+    @OpLog(module = "订单管理", table = "orders", type = OpType.EXPORT, desc = "导出 Excel")
+    public List<OrderVO> listForExport(OrderQueryReq req) {
+        LambdaQueryWrapper<OrderView> w = buildWrapper(req);
+        w.orderByDesc(OrderView::getId);
+
+        // 上限探测: 多取一行判断有没有超, 不要先 count(*) 再查一遍
+        List<OrderView> rows = orderViewMapper.selectList(
+                w.last("limit " + (ExportConstants.MAX_ROWS + 1)));
+        if (rows.size() > ExportConstants.MAX_ROWS) {
+            throw new BizException(
+                    "导出行数超过 " + ExportConstants.MAX_ROWS + " 条，请缩小筛选范围后重试");
+        }
+        return rows.stream().map(OrderVO::from).toList();
+    }
+
+    /** 列表和导出共用同一套筛选条件, 保证"列表里看到什么, 导出来就是什么" */
+    private LambdaQueryWrapper<OrderView> buildWrapper(OrderQueryReq req) {
         LambdaQueryWrapper<OrderView> w = new LambdaQueryWrapper<>();
 
         // 按客户姓名前缀匹配(不是 id): 列表筛选是给人用的, 没人记得住客户 id。
@@ -73,13 +104,7 @@ public class OrderServiceImpl implements OrderService {
         // 下单时间区间, 两端都是闭区间(>= from, <= to), 单边不传就只限一边
         w.ge(req.getOrderDateFrom() != null, OrderView::getOrderDate, req.getOrderDateFrom());
         w.le(req.getOrderDateTo() != null, OrderView::getOrderDate, req.getOrderDateTo());
-
-        // 订单号是雪花算法的 19 位数字串, 定长, 所以按字符串倒序等价于按时间倒序(最新在前)。
-        // 若将来订单号长度会变, 这里的字典序就不再等于数值序, 需要改成按 insert_time 排序。
-        w.orderByDesc(OrderView::getId);
-
-        Page<OrderView> p = orderViewMapper.selectPage(new Page<>(pageNo, pageSize), w);
-        return PageResult.of(p, OrderVO::from);
+        return w;
     }
 
     @Override
@@ -113,6 +138,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @OpLog(module = "订单管理", table = "orders", type = OpType.INSERT, desc = "新增订单")
     @Transactional
     public void create(OrderCreateReq req) {
         // 库里没有物理外键, 关联记录是否存在必须由应用层校验
@@ -134,6 +160,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @OpLog(module = "订单管理", table = "orders", type = OpType.UPDATE, desc = "修改订单")
     @Transactional
     public void update(String id, OrderUpdateReq req) {
         if (orderViewMapper.selectById(id) == null) {
@@ -158,6 +185,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @OpLog(module = "订单管理", table = "orders", type = OpType.DELETE, desc = "删除订单")
     @Transactional
     public void delete(String id) {
         if (orderViewMapper.selectById(id) == null) {
@@ -174,6 +202,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @OpLog(module = "订单管理", table = "orders", type = OpType.DELETE, desc = "批量删除订单")
     @Transactional
     public void deleteBatch(List<String> ids) {
         // 去重: 前端多选时可能传进重复的订单号
