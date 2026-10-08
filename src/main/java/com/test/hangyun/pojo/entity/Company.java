@@ -5,12 +5,16 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * 公司信息表 company 。
  * <p>
- * 箱主、操作方、船东、管理公司共用这一张字典表。
- * 目前只服务于集装箱模块的**引用校验**和**名称展示**, 所以只映射了这几列。
- * /companies 做成完整资源时再补全字段。
+ * 这是**多用途字典**: 箱主、操作方、船东、管理公司都用这一张表。
+ * 目前被集装箱的 owner_id / operator_id 引用(两个字段都指向它)。
+ * <p>
+ * `name` 和 `code` 在库里都**没有唯一约束**, 所以允许重名、也允许代码重复。
+ * `code` 是箱主代码(BIC 四字码), 也就是箱号的开头四位。
  */
 @Data
 @TableName("company")
@@ -24,4 +28,16 @@ public class Company {
 
     /** 公司代码: 如 CSLU */
     private String code;
+
+    /**
+     * 创建时间。
+     * 由数据库触发器 set_time_fields() 维护, 应用层一律不要赋值, 留 null 即可。
+     */
+    private LocalDateTime insertTime;
+
+    /**
+     * 修改时间。
+     * 由数据库触发器 set_time_fields() 维护, 应用层一律不要赋值, 留 null 即可。
+     */
+    private LocalDateTime updateTime;
 }

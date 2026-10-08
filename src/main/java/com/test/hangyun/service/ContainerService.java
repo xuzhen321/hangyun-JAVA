@@ -4,6 +4,7 @@ import com.test.hangyun.common.PageResult;
 import com.test.hangyun.dto.ContainerCreateReq;
 import com.test.hangyun.dto.ContainerQueryReq;
 import com.test.hangyun.dto.ContainerUpdateReq;
+import com.test.hangyun.dto.vo.ContainerOptionVO;
 import com.test.hangyun.dto.vo.ContainerVO;
 
 import java.util.List;
@@ -15,6 +16,13 @@ public interface ContainerService {
 
     /** 详情 */
     ContainerVO getById(String no);
+
+    /**
+     * 下拉框候选(给新增装箱结果选箱子用): 最多 20 条, 返回箱号/状态。
+     * keyword 按**箱号前缀**匹配, 不传则返回前 20 条。
+     * 已删除的集装箱不会出现在候选里（它们不能再装货）。
+     */
+    List<ContainerOptionVO> options(String keyword);
 
     /** 新增: 箱号由前端提供, 必填且不可重复 */
     void create(ContainerCreateReq req);

@@ -637,6 +637,12 @@ create index idx_cargo_order_id                  on Cargo (order_id);
 -- 默认排序规则下普通 btree 撑不起 LIKE, 必须指定 varchar_pattern_ops 才会被查询用到。
 create index idx_cargo_type_name_pattern         on Cargo_Type (name varchar_pattern_ops);
 
+-- 公司按名称 / 代码前缀搜索(/companies?keyword= 和 /companies/options?keyword= 都用它)。
+-- 这两个索引是为了让"新增集装箱时选箱主/操作方"能搜出来, 不用盲填 id。
+-- 同理, name 和 code 在库里都没有唯一约束, 这两个是纯粹为 LIKE 建的模式索引。
+create index idx_company_name_pattern            on Company (name varchar_pattern_ops);
+create index idx_company_code_pattern            on Company (code varchar_pattern_ops);
+
 create index idx_cargo_container_result_cargo_id     on Cargo_Container_Result (cargo_id);
 create index idx_cargo_container_result_container_no on Cargo_Container_Result (container_no);
 

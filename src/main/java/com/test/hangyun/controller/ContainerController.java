@@ -6,6 +6,7 @@ import com.test.hangyun.dto.ContainerBatchDeleteReq;
 import com.test.hangyun.dto.ContainerCreateReq;
 import com.test.hangyun.dto.ContainerQueryReq;
 import com.test.hangyun.dto.ContainerUpdateReq;
+import com.test.hangyun.dto.vo.ContainerOptionVO;
 import com.test.hangyun.dto.vo.ContainerVO;
 import com.test.hangyun.service.ContainerService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,7 +20,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 集装箱管理。
@@ -38,6 +42,13 @@ public class ContainerController {
     @GetMapping
     public Result<PageResult<ContainerVO>> page(ContainerQueryReq req) {
         return Result.success(containerService.page(req));
+    }
+
+    @Operation(summary = "集装箱下拉框(给新增装箱结果选箱子用: 箱号前缀搜索, 最多 20 条)")
+    @GetMapping("/options")
+    public Result<List<ContainerOptionVO>> options(
+            @RequestParam(required = false) String keyword) {
+        return Result.success(containerService.options(keyword));
     }
 
     @Operation(summary = "查询集装箱详情")

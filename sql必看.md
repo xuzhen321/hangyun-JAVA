@@ -188,6 +188,15 @@ create index if not exists idx_port_cnname_pattern on Port (cnname varchar_patte
 create index if not exists idx_cargo_type_name_pattern on Cargo_Type (name varchar_pattern_ops);
 ```
 
+#### 公司的名称 / 代码前缀索引（给 `/companies` 的 keyword 搜索用）
+
+```sql
+create index if not exists idx_company_name_pattern on Company (name varchar_pattern_ops);
+create index if not exists idx_company_code_pattern on Company (code varchar_pattern_ops);
+```
+
+> 这两个索引是为了让"新增集装箱时选箱主/操作方"能搜出来，不用盲填 id。名称和代码都要建——`keyword` 是同时匹配这两个字段的。
+
 #### 客户的姓名 / 资质前缀索引（给 `/customers` 的 name、qualification 搜索用）
 
 ```sql
@@ -210,11 +219,13 @@ create index idx_customer_qualification on Customer (qualification varchar_patte
 
 ```sql
 select indexname from pg_indexes
-where tablename in ('customer', 'port', 'cargo_type') and indexname like '%pattern%';
--- 期望 5 行:
+where tablename in ('customer', 'port', 'cargo_type', 'company')
+  and indexname like '%pattern%';
+-- 期望 7 行:
 --   idx_customer_name / idx_customer_qualification
 --   idx_port_enname_pattern / idx_port_cnname_pattern
 --   idx_cargo_type_name_pattern
+--   idx_company_name_pattern / idx_company_code_pattern
 ```
 
 ## 七、装完怎么确认

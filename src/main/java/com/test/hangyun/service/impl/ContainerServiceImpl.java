@@ -6,10 +6,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.test.hangyun.common.PageResult;
 import com.test.hangyun.common.exception.BizException;
 import com.test.hangyun.constant.ContainerStatusConstants;
+import com.test.hangyun.constant.OptionConstants;
 import com.test.hangyun.constant.PageConstants;
 import com.test.hangyun.dto.ContainerCreateReq;
 import com.test.hangyun.dto.ContainerQueryReq;
 import com.test.hangyun.dto.ContainerUpdateReq;
+import com.test.hangyun.dto.vo.ContainerOptionVO;
 import com.test.hangyun.dto.vo.ContainerVO;
 import com.test.hangyun.mapper.CompanyMapper;
 import com.test.hangyun.mapper.ContainerMapper;
@@ -72,6 +74,11 @@ public class ContainerServiceImpl implements ContainerService {
             w.and(q -> q.ne(Container::getStatusId, ContainerStatusConstants.STATUS_DELETED)
                     .or().isNull(Container::getStatusId));
         }
+
+        // 箱主 / 操作方都是 company 表, 但它们是两个独立字段, 所以两个条件各查各的
+        w.eq(req.getOwnerId() != null, Container::getOwnerId, req.getOwnerId());
+        w.eq(req.getOperatorId() != null, Container::getOperatorId, req.getOperatorId());
+
         w.orderByAsc(Container::getNo);
 
         Page<Container> p = containerMapper.selectPage(new Page<>(pageNo, pageSize), w);
@@ -118,6 +125,28 @@ public class ContainerServiceImpl implements ContainerService {
                     findStatusDescriptions(List.of(c.getStatusId())).get(c.getStatusId()));
         }
         return vo;
+    }
+
+    @Override
+    public List<ContainerOptionVO> options(String keyword) {
+        LambdaQueryWrapper<Container> w = new LambdaQueryWrapper<>();
+        // 箱号是定长业务编码(如 SEGU9481570), 用户一般输前几位来缩小范围
+        if (StringUtils.hasText(keyword)) {
+            w.likeRight(Container::getNo, keyword.trim());
+        }
+        // 已删除的箱子不能再装货, 所以不该出现在候选里(和新增校验的口径保持一致)
+        w.and(q -> q.ne(Container::getStatusId, ContainerStatusConstants.STATUS_DELETED)
+                .or().isNull(Container::getStatusId));
+        w.orderByAsc(Container::getNo);
+
+        // searchCount=false: 下拉框不需要 total, 省掉那条 COUNT
+        List<Container> records = containerMapper.selectPage(
+                new Page<>(1, OptionConstants.OPTION_LIMIT, false), w).getRecords();
+
+        Map<Long, String> statuses = findStatusDescriptions(collect(records, Container::getStatusId));
+        return records.stream()
+                .map(c -> ContainerOptionVO.of(c, statuses.get(c.getStatusId())))
+                .toList();
     }
 
     @Override
