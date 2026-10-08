@@ -6,8 +6,11 @@ import com.test.hangyun.dto.ContainerBatchDeleteReq;
 import com.test.hangyun.dto.ContainerCreateReq;
 import com.test.hangyun.dto.ContainerQueryReq;
 import com.test.hangyun.dto.ContainerUpdateReq;
+import com.test.hangyun.dto.vo.ContainerEventVO;
 import com.test.hangyun.dto.vo.ContainerOptionVO;
+import com.test.hangyun.dto.vo.ContainerSummaryVO;
 import com.test.hangyun.dto.vo.ContainerVO;
+import com.test.hangyun.service.ContainerEventService;
 import com.test.hangyun.service.ContainerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,10 +41,30 @@ public class ContainerController {
 
     private final ContainerService containerService;
 
+    /**
+     * 轨迹和概览挂在 /containers/{no} 下面(它们是"某个集装箱的物流信息"), 所以这里跨模块用了
+     * ContainerEventService。和 CustomerController 用 OrderService 是同一个理由。
+     */
+    private final ContainerEventService containerEventService;
+
     @Operation(summary = "分页查询集装箱(可按箱号前缀、状态精确筛选)")
     @GetMapping
     public Result<PageResult<ContainerVO>> page(ContainerQueryReq req) {
         return Result.success(containerService.page(req));
+    }
+
+    @Operation(summary = "集装箱轨迹(按箱号查全部物流事件, 按发生时间升序, 可直接画时间轴)")
+    @GetMapping("/{no}/track")
+    public Result<List<ContainerEventVO>> track(@PathVariable String no) {
+        return Result.success(containerEventService.track(no));
+    }
+
+    @Operation(summary = "集装箱概览(基础信息 + 最近一条物流事件)")
+    @GetMapping("/{no}/summary")
+    public Result<ContainerSummaryVO> summary(@PathVariable String no) {
+        return Result.success(ContainerSummaryVO.of(
+                containerService.getById(no),
+                containerEventService.latestEvent(no)));
     }
 
     @Operation(summary = "集装箱下拉框(给新增装箱结果选箱子用: 箱号前缀搜索, 最多 20 条)")

@@ -13,7 +13,7 @@
 | 3 | `customer-status-data.sql` | 写入客户状态 **1 正常 / 2 异常 / 3 注销** | 客户状态下拉框是空的；客户删除（逻辑删除）会把状态指向不存在的 id |
 | 4 | `order-status-data.sql` | 写入订单状态 **1 已确认 / 2 执行中 / 3 已完成 / 4 已取消** | 订单状态下拉框是空的；订单删除（逻辑删除）同上 |
 
-## 二、可选的 12 个
+## 二、可选的 16 个
 
 | 文件 | 作用 | 依赖 |
 |---|---|---|
@@ -29,6 +29,10 @@
 | `cargo-container-result-data.sql` | 3 条装箱结果样本数据 | **`cargo-data.sql` + `container-data.sql`** |
 | `trailer-data.sql` | 8 辆拖车（车牌 + 司机） | 第 1 步 |
 | `container-trailer-record-data.sql` | 8 条提空箱记录 | **`container-data.sql` + `trailer-data.sql`** |
+| `event-status-data.sql` | 6 条事件状态（1-5 业务值 + 6 内置的"已删除"） | 第 1 步 |
+| `vessel-data.sql` | 5 艘船（船名 / MMSI / IMO） | **`company-data.sql`** |
+| `voyage-data.sql` | 4 个航次 | **`port-data.sql` + `vessel-data.sql`** |
+| `container-event-data.sql` | 10 条物流事件（含一条逻辑删除的） | **事件状态 + 集装箱 + 港口 + 航次** |
 
 都是**纯测试数据，不装不影响功能**，但装了才能端到端联调：
 
@@ -80,6 +84,14 @@
 15. trailer-data.sql        拖车样本（可选，只依赖第 1 步）
         ↓
 16. container-trailer-record-data.sql 提空箱记录样本（可选，依赖第 13/15 步）
+        ↓
+17. event-status-data.sql   事件状态 1-6（可选，只依赖第 1 步）
+        ↓
+18. vessel-data.sql         船舶样本（可选，依赖第 12 步的公司）
+        ↓
+19. voyage-data.sql         航次样本（可选，依赖第 6 步的港口 + 第 18 步的船舶）
+        ↓
+20. container-event-data.sql 物流事件样本（可选，依赖第 8/17/19 步）
 ```
 
 第 6、7 步只依赖第 1 步，放在第 5 步前后都行；第 10-12 步同理，放在第 5 步前后都行。
@@ -114,6 +126,10 @@ psql -h localhost -p 5432 -U postgres -d demo -f container-data.sql           # 
 psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql  # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f trailer-data.sql                 # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f container-trailer-record-data.sql # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f event-status-data.sql           # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f vessel-data.sql                 # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f voyage-data.sql                 # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f container-event-data.sql        # 可选
 ```
 
 也可以在 Navicat / DataGrip 里按同样的顺序打开并运行。
@@ -140,6 +156,10 @@ psql -h localhost -p 5432 -U postgres -d demo -f container-trailer-record-data.s
 | `cargo-container-result-data.sql` | ✅ 可以 | 同上 |
 | `trailer-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `trailer.no` 是 varchar 主键，没有自增序列 |
 | `container-trailer-record-data.sql` | ✅ 可以 | 同上 |
+| `event-status-data.sql` | ✅ 可以 | 同上 |
+| `vessel-data.sql` | ✅ 可以 | 同上 |
+| `voyage-data.sql` | ✅ 可以 | 同上。⚠️ 它给航次填了 `vsl_id` —— **如果你之前已经跑过这个文件**，那几条航次已存在，`insert` 不会更新它们，要手工跑一遍文件头里那几条 `update` |
+| `container-event-data.sql` | ✅ 可以 | 同上 |
 | `order-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `orders.id` 是 varchar 主键，没有自增序列 |
 
 如果 `initial.sql` 跑到一半失败了，需要先把已建的表删掉再重跑，或者直接删库重建。
@@ -301,6 +321,15 @@ select count(*) from container;
 -- 拖车 8 辆、提空箱记录 8 条
 select count(*) from trailer;
 select count(*) from container_trailer_record;
+
+-- 事件状态 6 条、船舶 5 艘、航次 4 个、物流事件 10 条
+select count(*) from event_status;
+select count(*) from vessel;
+select count(*) from voyage;
+select count(*) from container_event;
+
+-- 航次的 vsl_id 应该都有值了（不是 null），否则轨迹里船名还是空的
+select id, no, vsl_id from voyage order by id;
 ```
 
 再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 4 步都到位了。
