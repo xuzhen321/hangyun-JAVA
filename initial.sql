@@ -654,6 +654,14 @@ create index idx_container_status_id             on Container (status_id);
 create index idx_ctr_trailer_record_container_no on Container_Trailer_Record (container_no);
 create index idx_ctr_trailer_record_track_no     on Container_Trailer_Record (track_no);
 
+-- 下面四个是**给前缀搜索用的模式索引**, 和上面那两个外键索引是两回事:
+-- 上面那两个服务等值查询(=), 服务不了 LIKE, 所以同一列上再建一个 varchar_pattern_ops 变体。
+-- 用在: 提空箱登记的列表(箱号/拖车号前缀)、拖车的列表和下拉框(拖车号/司机姓名前缀)。
+create index idx_ctr_trailer_record_container_no_pattern on Container_Trailer_Record (container_no varchar_pattern_ops);
+create index idx_ctr_trailer_record_track_no_pattern     on Container_Trailer_Record (track_no varchar_pattern_ops);
+create index idx_trailer_no_pattern                      on Trailer (no varchar_pattern_ops);
+create index idx_trailer_name_pattern                    on Trailer (name varchar_pattern_ops);
+
 create index idx_container_event_container_no    on Container_Event (container_no);
 create index idx_container_event_voyage_id       on Container_Event (voyage_id);
 create index idx_container_event_place_id        on Container_Event (event_place_id);

@@ -13,7 +13,7 @@
 | 3 | `customer-status-data.sql` | 写入客户状态 **1 正常 / 2 异常 / 3 注销** | 客户状态下拉框是空的；客户删除（逻辑删除）会把状态指向不存在的 id |
 | 4 | `order-status-data.sql` | 写入订单状态 **1 已确认 / 2 执行中 / 3 已完成 / 4 已取消** | 订单状态下拉框是空的；订单删除（逻辑删除）同上 |
 
-## 二、可选的 10 个
+## 二、可选的 12 个
 
 | 文件 | 作用 | 依赖 |
 |---|---|---|
@@ -27,6 +27,8 @@
 | `company-data.sql` | 8 家公司（箱主 / 操作方，含箱主代码） | 第 1 步 |
 | `container-data.sql` | 6 个集装箱 | **上面三个字典** |
 | `cargo-container-result-data.sql` | 3 条装箱结果样本数据 | **`cargo-data.sql` + `container-data.sql`** |
+| `trailer-data.sql` | 8 辆拖车（车牌 + 司机） | 第 1 步 |
+| `container-trailer-record-data.sql` | 8 条提空箱记录 | **`container-data.sql` + `trailer-data.sql`** |
 
 都是**纯测试数据，不装不影响功能**，但装了才能端到端联调：
 
@@ -37,6 +39,7 @@
 - 不装 `cargo-data.sql` → `GET /cargos` 查不到东西；**货物种类的删除保护也测不出来**（没有货物引用它们，删谁都会成功）
 - 不装**那三张集装箱字典** → 新增集装箱时，箱型 / 箱主 / 操作方 / 状态**四栏全都没有下拉选项**
 - 不装 `container-data.sql` → `GET /containers` 是空的；而且**一条装箱结果都建不了**（箱号必须是已存在的集装箱，见下）
+- 不装 `trailer-data.sql` → `GET /trailers` 是空的；而且**一条提空箱记录都建不了**（拖车号必须是已存在的拖车）
 
 ⚠️ **`cargo-container-result-data.sql` 有用处**：既让 `/cargo-container-results` 的列表和筛选有东西可试，又让**「订单货物的删除保护」可以被验证**——删货物前会检查有没有装箱记录引用它，表空着的话删任何货物都会成功，这道保护等于测不到。
 
@@ -73,6 +76,10 @@
 13. container-data.sql      集装箱样本（可选，依赖第 10/11/12 步）
         ↓
 14. cargo-container-result-data.sql   装箱结果样本（可选，依赖第 9/13 步）
+        ↓
+15. trailer-data.sql        拖车样本（可选，只依赖第 1 步）
+        ↓
+16. container-trailer-record-data.sql 提空箱记录样本（可选，依赖第 13/15 步）
 ```
 
 第 6、7 步只依赖第 1 步，放在第 5 步前后都行；第 10-12 步同理，放在第 5 步前后都行。
@@ -105,6 +112,8 @@ psql -h localhost -p 5432 -U postgres -d demo -f container-status-data.sql    # 
 psql -h localhost -p 5432 -U postgres -d demo -f company-data.sql             # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f container-data.sql           # 可选
 psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql  # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f trailer-data.sql                 # 可选
+psql -h localhost -p 5432 -U postgres -d demo -f container-trailer-record-data.sql # 可选
 ```
 
 也可以在 Navicat / DataGrip 里按同样的顺序打开并运行。
@@ -129,6 +138,8 @@ psql -h localhost -p 5432 -U postgres -d demo -f cargo-container-result-data.sql
 | `company-data.sql` | ✅ 可以 | 同上 |
 | `container-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `container.no` 是 varchar 主键，没有自增序列 |
 | `cargo-container-result-data.sql` | ✅ 可以 | 同上 |
+| `trailer-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `trailer.no` 是 varchar 主键，没有自增序列 |
+| `container-trailer-record-data.sql` | ✅ 可以 | 同上 |
 | `order-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `orders.id` 是 varchar 主键，没有自增序列 |
 
 如果 `initial.sql` 跑到一半失败了，需要先把已建的表删掉再重跑，或者直接删库重建。
@@ -197,6 +208,20 @@ create index if not exists idx_company_code_pattern on Company (code varchar_pat
 
 > 这两个索引是为了让"新增集装箱时选箱主/操作方"能搜出来，不用盲填 id。名称和代码都要建——`keyword` 是同时匹配这两个字段的。
 
+#### 拖车 / 提空箱登记的前缀索引
+
+```sql
+-- 提空箱登记的列表按箱号 / 拖车号前缀搜。
+-- 注意这两个列**已经有外键索引**了（idx_ctr_trailer_record_container_no / _track_no），
+-- 但那个服务等值查询、服务不了 LIKE，所以同一列上再建一个 pattern 变体，各管一种查询。
+create index if not exists idx_ctr_trailer_record_container_no_pattern on Container_Trailer_Record (container_no varchar_pattern_ops);
+create index if not exists idx_ctr_trailer_record_track_no_pattern     on Container_Trailer_Record (track_no varchar_pattern_ops);
+
+-- 拖车的列表和下拉框按拖车号 / 司机姓名前缀搜。拖车号是主键，普通索引同样撑不起 LIKE。
+create index if not exists idx_trailer_no_pattern   on Trailer (no varchar_pattern_ops);
+create index if not exists idx_trailer_name_pattern on Trailer (name varchar_pattern_ops);
+```
+
 #### 客户的姓名 / 资质前缀索引（给 `/customers` 的 name、qualification 搜索用）
 
 ```sql
@@ -219,13 +244,16 @@ create index idx_customer_qualification on Customer (qualification varchar_patte
 
 ```sql
 select indexname from pg_indexes
-where tablename in ('customer', 'port', 'cargo_type', 'company')
+where tablename in ('customer', 'port', 'cargo_type', 'company',
+                    'trailer', 'container_trailer_record')
   and indexname like '%pattern%';
--- 期望 7 行:
+-- 期望 11 行:
 --   idx_customer_name / idx_customer_qualification
 --   idx_port_enname_pattern / idx_port_cnname_pattern
 --   idx_cargo_type_name_pattern
 --   idx_company_name_pattern / idx_company_code_pattern
+--   idx_trailer_no_pattern / idx_trailer_name_pattern
+--   idx_ctr_trailer_record_container_no_pattern / idx_ctr_trailer_record_track_no_pattern
 ```
 
 ## 七、装完怎么确认
@@ -269,6 +297,10 @@ select count(*) from container_type;
 select count(*) from container_status;   -- 7 条: 1-6 是示例值, 7 是内置的「已删除」
 select count(*) from company;
 select count(*) from container;
+
+-- 拖车 8 辆、提空箱记录 8 条
+select count(*) from trailer;
+select count(*) from container_trailer_record;
 ```
 
 再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 4 步都到位了。
