@@ -48,7 +48,8 @@ public class OperationLogWriter {
         e.setTargetTable(trimToNull(targetTable));
         e.setTargetId(trimToNull(targetId));
         e.setAfterValue(truncate(afterValue, OperationLogConstants.MAX_VALUE_LENGTH));
-        // before_value 见 LogAspect 的类注释: 通用切面拿不到"改之前"的快照
+        // before_value 刻意不赋值: 应用层拿不到"改之前"的快照, 那一列由数据库触发器
+        // log_row_change() 填, 见 log-before-trigger.sql 与 LogAspect 的类注释
         operationLogMapper.insert(e);
     }
 

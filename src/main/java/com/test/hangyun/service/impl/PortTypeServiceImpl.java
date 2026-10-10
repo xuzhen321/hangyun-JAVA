@@ -65,7 +65,6 @@ public class PortTypeServiceImpl implements PortTypeService {
         portTypeMapper.insert(e);
     }
 
-    @OpLog(module = "港口类型", table = "port_type", type = OpType.UPDATE, desc = "修改港口类型")
     @Override
     @Transactional
     public void update(Long id, PortTypeReq req) {
@@ -76,7 +75,6 @@ public class PortTypeServiceImpl implements PortTypeService {
         portTypeMapper.update(null, u);
     }
 
-    @OpLog(module = "港口类型", table = "port_type", type = OpType.DELETE, desc = "删除港口类型")
     @Override
     @Transactional
     public void delete(Long id) {

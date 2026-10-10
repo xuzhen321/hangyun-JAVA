@@ -158,7 +158,6 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
-    @OpLog(module = "订单货物", table = "cargo", type = OpType.UPDATE, desc = "修改订单货物")
     @Transactional
     public void update(Long id, CargoUpdateReq req) {
         getExisting(id);
@@ -174,7 +173,6 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
-    @OpLog(module = "订单货物", table = "cargo", type = OpType.DELETE, desc = "删除订单货物")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -186,7 +184,6 @@ public class CargoServiceImpl implements CargoService {
     }
 
     @Override
-    @OpLog(module = "订单货物", table = "cargo", type = OpType.DELETE, desc = "批量删除订单货物")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能传进重复的 id

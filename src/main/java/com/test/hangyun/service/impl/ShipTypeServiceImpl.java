@@ -77,7 +77,6 @@ public class ShipTypeServiceImpl implements ShipTypeService {
         shipTypeMapper.insert(e);
     }
 
-    @OpLog(module = "船舶类型", table = "ship_type", type = OpType.UPDATE, desc = "修改船舶类型")
     @Override
     @Transactional
     public void update(Long id, ShipTypeReq req) {
@@ -95,7 +94,6 @@ public class ShipTypeServiceImpl implements ShipTypeService {
         shipTypeMapper.update(null, u);
     }
 
-    @OpLog(module = "船舶类型", table = "ship_type", type = OpType.DELETE, desc = "删除船舶类型")
     @Override
     @Transactional
     public void delete(Long id) {

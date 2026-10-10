@@ -70,7 +70,6 @@ public class ContainerTypeServiceImpl implements ContainerTypeService {
         containerTypeMapper.insert(e);
     }
 
-    @OpLog(module = "集装箱箱型", table = "container_type", type = OpType.UPDATE, desc = "修改集装箱箱型")
     @Override
     @Transactional
     public void update(Long id, ContainerTypeReq req) {
@@ -83,7 +82,6 @@ public class ContainerTypeServiceImpl implements ContainerTypeService {
         containerTypeMapper.update(null, u);
     }
 
-    @OpLog(module = "集装箱箱型", table = "container_type", type = OpType.DELETE, desc = "删除集装箱箱型")
     @Override
     @Transactional
     public void delete(Long id) {

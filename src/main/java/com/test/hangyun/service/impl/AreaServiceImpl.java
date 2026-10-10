@@ -67,7 +67,6 @@ public class AreaServiceImpl implements AreaService {
         areaMapper.insert(e);
     }
 
-    @OpLog(module = "区域字典", table = "area", type = OpType.UPDATE, desc = "修改区域")
     @Override
     @Transactional
     public void update(Long id, AreaReq req) {
@@ -80,7 +79,6 @@ public class AreaServiceImpl implements AreaService {
         areaMapper.update(null, u);
     }
 
-    @OpLog(module = "区域字典", table = "area", type = OpType.DELETE, desc = "删除区域")
     @Override
     @Transactional
     public void delete(Long id) {

@@ -129,7 +129,6 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
-    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.UPDATE, desc = "修改提空箱记录")
     @Transactional
     public void update(Long id, ContainerTrailerRecordReq req) {
         getExisting(id);
@@ -151,7 +150,6 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
-    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.DELETE, desc = "删除提空箱记录")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -160,7 +158,6 @@ public class ContainerTrailerRecordServiceImpl implements ContainerTrailerRecord
     }
 
     @Override
-    @OpLog(module = "提空箱登记", table = "container_trailer_record", type = OpType.DELETE, desc = "批量删除提空箱记录")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能传进重复的 id

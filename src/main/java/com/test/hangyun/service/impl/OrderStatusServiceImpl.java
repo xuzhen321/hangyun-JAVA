@@ -67,7 +67,6 @@ public class OrderStatusServiceImpl implements OrderStatusService {
 
     @Override
     @Transactional
-    @OpLog(module = "订单状态", table = "order_status", type = OpType.UPDATE, desc = "修改订单状态")
     public void update(Long id, OrderStatusReq req) {
         // 内置状态(1已确认/2执行中/3已完成/4已取消)是系统基础数据, 一律不允许修改。
         // 这一条与库里存不存在无关, 所以放在存在性校验之前先挡掉。
@@ -87,7 +86,6 @@ public class OrderStatusServiceImpl implements OrderStatusService {
 
     @Override
     @Transactional
-    @OpLog(module = "订单状态", table = "order_status", type = OpType.DELETE, desc = "删除订单状态")
     public void delete(Long id) {
         // 内置状态(1已确认/2执行中/3已完成/4已取消)是系统基础数据, 一律不允许删除。
         // 这一条与库里存不存在无关, 所以放在存在性校验之前先挡掉。

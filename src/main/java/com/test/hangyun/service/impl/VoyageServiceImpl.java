@@ -119,7 +119,6 @@ public class VoyageServiceImpl implements VoyageService {
     }
 
     @Override
-    @OpLog(module = "航次管理", table = "voyage", type = OpType.UPDATE, desc = "修改航次")
     @Transactional
     public void update(Long id, VoyageReq req) {
         getExisting(id);
@@ -139,7 +138,6 @@ public class VoyageServiceImpl implements VoyageService {
     }
 
     @Override
-    @OpLog(module = "航次管理", table = "voyage", type = OpType.DELETE, desc = "删除航次")
     @Transactional
     public void delete(Long id) {
         getExisting(id);

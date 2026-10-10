@@ -14,9 +14,14 @@ import java.lang.annotation.Target;
  * 请求也记一笔):
  *
  * <pre>{@code
- * @OpLog(module = "集装箱信息管理", table = "container", type = OpType.UPDATE, desc = "更新集装箱")
- * public void update(String no, ContainerUpdateReq req) { ... }
+ * @OpLog(module = "集装箱信息管理", table = "container", type = OpType.INSERT, desc = "新增集装箱")
+ * public void create(ContainerCreateReq req) { ... }
  * }</pre>
+ * <p>
+ * ⚠️ **只标切面真正负责的操作**: {@code INSERT} / {@code EXPORT} / {@code LOGIN},
+ * 以及 {@code Users} 表的 UPDATE / DELETE。其余表的 UPDATE / DELETE 改由数据库触发器
+ * {@code log_row_change()} 记(见 log-before-trigger.sql) —— 因为只有它能拿到"改之前"的
+ * 整行。那些注解已经全部去掉了, 写新代码时**别再标回去**, 否则同一次修改会记两行。
  * <p>
  * ⚠️ 标注的方法**自身不要吞异常** —— 切面靠异常来判断这次操作是成功还是失败
  * ({@code result_status} 的 1/0)。

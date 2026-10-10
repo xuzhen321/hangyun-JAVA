@@ -198,7 +198,6 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
-    @OpLog(module = "集装箱", table = "container", type = OpType.UPDATE, desc = "修改集装箱")
     @Transactional
     public void update(String no, ContainerUpdateReq req) {
         getExisting(no);
@@ -222,7 +221,6 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
-    @OpLog(module = "集装箱", table = "container", type = OpType.DELETE, desc = "删除集装箱")
     @Transactional
     public void delete(String no) {
         getExisting(no);
@@ -237,7 +235,6 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
-    @OpLog(module = "集装箱", table = "container", type = OpType.DELETE, desc = "批量删除集装箱")
     @Transactional
     public void deleteBatch(List<String> nos) {
         // 去重: 前端多选时可能传进重复的箱号

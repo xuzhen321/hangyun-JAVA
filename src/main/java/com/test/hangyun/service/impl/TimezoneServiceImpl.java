@@ -73,7 +73,6 @@ public class TimezoneServiceImpl implements TimezoneService {
         timezoneMapper.insert(e);
     }
 
-    @OpLog(module = "时区字典", table = "timezone", type = OpType.UPDATE, desc = "修改时区")
     @Override
     @Transactional
     public void update(Long id, TimezoneReq req) {
@@ -90,7 +89,6 @@ public class TimezoneServiceImpl implements TimezoneService {
         timezoneMapper.update(null, u);
     }
 
-    @OpLog(module = "时区字典", table = "timezone", type = OpType.DELETE, desc = "删除时区")
     @Override
     @Transactional
     public void delete(Long id) {

@@ -76,7 +76,6 @@ public class CompanyServiceImpl implements CompanyService {
         companyMapper.insert(e);
     }
 
-    @OpLog(module = "公司信息", table = "company", type = OpType.UPDATE, desc = "修改公司")
     @Override
     @Transactional
     public void update(Long id, CompanyReq req) {
@@ -89,7 +88,6 @@ public class CompanyServiceImpl implements CompanyService {
         companyMapper.update(null, u);
     }
 
-    @OpLog(module = "公司信息", table = "company", type = OpType.DELETE, desc = "删除公司")
     @Override
     @Transactional
     public void delete(Long id) {

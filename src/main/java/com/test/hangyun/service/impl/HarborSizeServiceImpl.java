@@ -67,7 +67,6 @@ public class HarborSizeServiceImpl implements HarborSizeService {
 
     @Override
     @Transactional
-    @OpLog(module = "港口尺寸", table = "harbor_size", type = OpType.UPDATE, desc = "修改港口尺寸")
     public void update(Long id, HarborSizeReq req) {
         getExisting(id);
 
@@ -78,7 +77,6 @@ public class HarborSizeServiceImpl implements HarborSizeService {
 
     @Override
     @Transactional
-    @OpLog(module = "港口尺寸", table = "harbor_size", type = OpType.DELETE, desc = "删除港口尺寸")
     public void delete(Long id) {
         getExisting(id);
         long ports = harborSizeMapper.countPortsByHarborSizeId(id);

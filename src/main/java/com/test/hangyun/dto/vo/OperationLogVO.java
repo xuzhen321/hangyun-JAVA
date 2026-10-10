@@ -37,7 +37,13 @@ public class OperationLogVO {
     /** 操作发生时间 */
     private LocalDateTime operationTime;
 
-    /** 操作前的数据快照。⚠️ 通用切面拿不到, 通常为 null, 见 LogAspect 的类注释 */
+    /**
+     * 操作前的数据快照(改之前那一整行的 JSON)。
+     * <p>
+     * ⚠️ 只有 UPDATE / DELETE 且目标表挂了触发器时才有值 —— 应用层切面写不出它
+     * (拿不到"改之前"的快照), 这一列由数据库触发器 {@code log_row_change()} 填,
+     * 见 log-before-trigger.sql。INSERT / EXPORT / LOGIN 恒为 null。
+     */
     private String beforeValue;
 
     /** 操作后提交的数据快照(方法入参的 JSON) */

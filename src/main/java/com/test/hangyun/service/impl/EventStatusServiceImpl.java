@@ -78,7 +78,6 @@ public class EventStatusServiceImpl implements EventStatusService {
 
     @Override
     @Transactional
-    @OpLog(module = "事件状态", table = "event_status", type = OpType.UPDATE, desc = "修改事件状态")
     public void update(Long id, EventStatusReq req) {
         // id=6「已删除」是内置状态, 不允许改描述 —— 事件的逻辑删除依赖它
         if (EventStatusConstants.isBuiltin(id)) {
@@ -99,7 +98,6 @@ public class EventStatusServiceImpl implements EventStatusService {
 
     @Override
     @Transactional
-    @OpLog(module = "事件状态", table = "event_status", type = OpType.DELETE, desc = "删除事件状态")
     public void delete(Long id) {
         // id=6「已删除」是内置状态, 一律不允许删除
         if (EventStatusConstants.isBuiltin(id)) {

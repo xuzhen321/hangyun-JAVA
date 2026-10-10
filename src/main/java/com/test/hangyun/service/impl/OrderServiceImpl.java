@@ -160,7 +160,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @OpLog(module = "订单管理", table = "orders", type = OpType.UPDATE, desc = "修改订单")
     @Transactional
     public void update(String id, OrderUpdateReq req) {
         if (orderViewMapper.selectById(id) == null) {
@@ -185,7 +184,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @OpLog(module = "订单管理", table = "orders", type = OpType.DELETE, desc = "删除订单")
     @Transactional
     public void delete(String id) {
         if (orderViewMapper.selectById(id) == null) {
@@ -202,7 +200,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @OpLog(module = "订单管理", table = "orders", type = OpType.DELETE, desc = "批量删除订单")
     @Transactional
     public void deleteBatch(List<String> ids) {
         // 去重: 前端多选时可能传进重复的订单号

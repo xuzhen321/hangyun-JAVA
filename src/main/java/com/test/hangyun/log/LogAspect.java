@@ -24,10 +24,20 @@ import tools.jackson.databind.ObjectMapper;
  * 动了哪张表哪条记录({@code target_table} / {@code target_id})、什么时候、
  * 成功还是失败、失败时报了什么错、以及提交的入参({@code after_value})。
  * <p>
- * ⚠️ **{@code before_value} 恒为 null**, 这是通用切面的能力边界, 不是漏写:
- * 要拿到"改之前"的快照, 必须知道目标表、按主键回查一次库。切面只有方法签名和入参,
- * 拿不到这些信息。真需要留痕"改前值"的地方, 得在那个 Service 里显式查一次再手工写日志。
- * 目前 {@code after_value}(提交的内容)+ 失败信息已经够支撑"谁在什么时候动了什么"。
+ * ⚠️ **切面自己写不出 {@code before_value}**(恒为 null) —— 这是它的能力边界, 不是漏写:
+ * 要拿"改之前"的快照, 必须知道目标表、按主键回查一次库, 而切面手里只有方法签名和入参。
+ * <p>
+ * 所以 UPDATE / DELETE 的改前值改由**数据库触发器** {@code log_row_change()} 负责
+ * (见 log-before-trigger.sql) —— 它有 OLD 整行, 天然拿得到。由此带来三条约定:
+ * <ul>
+ *   <li>{@code OpType.UPDATE} / {@code OpType.DELETE} 上的 {@link OpLog} 已经**去掉**,
+ *       再标回去会让同一次修改被切面和触发器各记一行;</li>
+ *   <li>{@code Users} 表**没有**挂触发器(防止密码哈希被整行快照抄进审计表),
+ *       它的 UPDATE / DELETE 仍然走本切面;</li>
+ *   <li>触发器那行的 {@code user_id} 由 {@link AuditUserInterceptor} 写进事务变量后读取,
+ *       和本切面走的是两条独立的路。</li>
+ * </ul>
+ * 所以本切面现在负责 {@code INSERT} / {@code EXPORT} / {@code LOGIN}, 以及 Users 表的写操作。
  * <p>
  * ⚠️ 切面自己**不抛异常**: 记日志失败绝不能把已经成功的业务搞成失败(见
  * {@link OperationLogWriter#writeSafely})。

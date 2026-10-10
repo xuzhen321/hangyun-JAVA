@@ -170,7 +170,6 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
-    @OpLog(module = "物流事件", table = "container_event", type = OpType.UPDATE, desc = "修改物流事件")
     @Transactional
     public void update(Long id, ContainerEventReq req) {
         getExisting(id);
@@ -194,7 +193,6 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
-    @OpLog(module = "物流事件", table = "container_event", type = OpType.DELETE, desc = "删除物流事件")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -207,7 +205,6 @@ public class ContainerEventServiceImpl implements ContainerEventService {
     }
 
     @Override
-    @OpLog(module = "物流事件", table = "container_event", type = OpType.DELETE, desc = "批量删除物流事件")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         List<Long> distinctIds = ids.stream().distinct().toList();

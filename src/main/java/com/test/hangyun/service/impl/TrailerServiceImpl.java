@@ -84,7 +84,6 @@ public class TrailerServiceImpl implements TrailerService {
         trailerMapper.insert(e);
     }
 
-    @OpLog(module = "拖车管理", table = "trailer", type = OpType.UPDATE, desc = "修改拖车")
     @Override
     @Transactional
     public void update(String no, TrailerUpdateReq req) {
@@ -98,7 +97,6 @@ public class TrailerServiceImpl implements TrailerService {
         trailerMapper.update(null, u);
     }
 
-    @OpLog(module = "拖车管理", table = "trailer", type = OpType.DELETE, desc = "删除拖车")
     @Override
     @Transactional
     public void delete(String no) {

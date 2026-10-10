@@ -149,7 +149,6 @@ public class PortServiceImpl implements PortService {
     }
 
     @Override
-    @OpLog(module = "港口管理", table = "port", type = OpType.UPDATE, desc = "修改港口")
     @Transactional
     public void update(Long id, PortUpdateReq req) {
         getExisting(id);
@@ -182,7 +181,6 @@ public class PortServiceImpl implements PortService {
     }
 
     @Override
-    @OpLog(module = "港口管理", table = "port", type = OpType.DELETE, desc = "删除港口")
     @Transactional
     public void delete(Long id) {
         getExisting(id);

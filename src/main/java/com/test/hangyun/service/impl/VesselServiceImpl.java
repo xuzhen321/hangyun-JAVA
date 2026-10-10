@@ -137,7 +137,6 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
-    @OpLog(module = "船舶管理", table = "vessel", type = OpType.UPDATE, desc = "修改船舶")
     @Transactional
     public void update(Long id, VesselUpdateReq req) {
         getExisting(id);
@@ -165,7 +164,6 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
-    @OpLog(module = "船舶管理", table = "vessel", type = OpType.DELETE, desc = "删除船舶")
     @Transactional
     public void delete(Long id) {
         getExisting(id);
@@ -179,7 +177,6 @@ public class VesselServiceImpl implements VesselService {
     }
 
     @Override
-    @OpLog(module = "船舶管理", table = "vessel", type = OpType.DELETE, desc = "批量删除船舶")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         List<Long> distinctIds = ids.stream().distinct().toList();

@@ -12,7 +12,7 @@
 
 ---
 
-## 一、必须执行的 4 个
+## 一、必须执行的 5 个
 
 | # | 文件 | 作用 | 不执行的后果 |
 |---|---|---|---|
@@ -20,6 +20,7 @@
 | 2 | `viewInitial.sql` | 建 **7 个视图** | 客户和订单的**列表、详情、修改、删除**全部报 `v_customer` / `v_order` 不存在（修改和删除虽然写的是基础表，但存在性校验查的是视图）；**只有新增和批量删除还能用**。另外 `GET /vessels`、`GET /ports` 会报**字段 `vessel_type_id` 不存在**（视图少了后补的 id 列，见 6.4） |
 | 3 | `customer-status-data.sql` | 写入客户状态 **1 正常 / 2 异常 / 3 注销** | 客户状态下拉框是空的；客户删除（逻辑删除）会把状态指向不存在的 id |
 | 4 | `order-status-data.sql` | 写入订单状态 **1 已确认 / 2 执行中 / 3 已完成 / 4 已取消** | 订单状态下拉框是空的；订单删除（逻辑删除）同上 |
+| 5 | `log-before-trigger.sql` | 给 26 张业务表挂操作日志的**「改前值」触发器** `log_row_change()`（只挂 update / delete；函数用 `create or replace`、触发器先 drop 再建，**可重复执行**） | ⚠️ **修改和删除会完全没有日志** —— 这两类的日志现在由触发器写，切面已经不管了。日志列表里看不到任何 UPDATE / DELETE 记录 |
 
 ## 二、可选的 26 个
 
@@ -130,6 +131,9 @@
 30. log-data.sql             操作日志样本（可选，依赖第 28/29 步）
 ```
 
+另有 **`log-before-trigger.sql`**（操作日志的「改前值」触发器，第一节的第 5 个），
+它只依赖第 1 步建出来的 `log` 表，**放在第 1 步之后的任意位置都行**，不必占用上面的编号。
+
 > ⚠️ **第 28 步不装的话登录不了** —— `POST /auth/login` 在 `Users` 表里找不到任何账号。
 > 另外**拦截器上线后所有接口都要带令牌**，所以 28 步实际上已经是"要跑"而不是"可选"了。
 >
@@ -212,6 +216,7 @@ psql -h localhost -p 5432 -U postgres -d demo -f container-event-data.sql       
 | `container-event-data.sql` | ✅ 可以 | 同上 |
 | `order-data.sql` | ✅ 可以 | 同上。另外它**不需要 setval** —— `orders.id` 是 varchar 主键，没有自增序列 |
 | `voyage-unique-constraint.sql` | ✅ 可以 | 用 `do $$` 查过 `pg_constraint`，加过就跳过（见 6.3） |
+| `log-before-trigger.sql` | ✅ 可以 | 函数用 `create or replace`；触发器**先 `drop trigger if exists` 再建**，所以**从"挂 insert 的旧版本"升级上来也能直接重跑**，不会报 `already exists` |
 
 如果 `initial.sql` 跑到一半失败了，需要先把已建的表删掉再重跑，或者直接删库重建。
 
@@ -483,6 +488,9 @@ where v.id = x.id;
 --    voyage-unique-constraint.sql
 
 -- ⑤ 可选：船舶/港口列表用的模式索引（见 6.2）
+
+-- ⑥ 操作日志的"改前值"触发器（见 log-before-trigger.sql）
+--    ⚠️ 不做的话修改/删除完全没有日志（切面已经不管了）
 ```
 
 ### 6.7 三张表的主键改成自增（**必须执行**）
@@ -647,9 +655,14 @@ select conname from pg_constraint where conname = 'uq_voyage_vsl_no';
 select vsl_id, no, count(*) from voyage
 where vsl_id is not null and no is not null
 group by vsl_id, no having count(*) > 1;
+
+-- 操作日志的"改前值"触发器：期望正好 26 行
+-- （每个触发器都应该是 `AFTER UPDATE OR DELETE`，**没有 INSERT**）
+select event_object_table, event_manipulation from information_schema.triggers
+where trigger_name like 'trg_log_change%' order by 1, 2;
 ```
 
-再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 4 步都到位了。
+再启动应用，打开 `http://localhost:8080/swagger-ui/index.html`，调一下 `GET /customer-statuses/all` 能返回 3 条就说明前 5 步都到位了。
 
 ## 八、几个容易踩的点
 
@@ -657,3 +670,4 @@ group by vsl_id, no having count(*) > 1;
 2. **`initial.sql` 只能跑一次**，其他几个可以反复跑。
 3. **不要手工改内置状态的 id**。1-3（客户）和 1-4（订单）被 Java 代码写死依赖（`CustomerStatusConstants` / `OrderStatusConstants`），其中「注销」「已取消」还是逻辑删除的落点。这些状态在当前版本里**既不能改也不能删**（接口会返回 409）。
 4. **`insert_time` / `update_time` 不要手工填**，`initial.sql` 里的触发器会自动维护，应用层也一律留空。
+5. **别再给 UPDATE / DELETE 方法标 `@OpLog`** —— 这类操作的日志现在由 `log-before-trigger.sql` 的触发器写，标回去会让同一次修改**记两行**（触发器一条带 `before_value`、切面一条没有）。切面只负责 `INSERT` / `EXPORT` / `LOGIN`，以及 `Users` 表的写操作。

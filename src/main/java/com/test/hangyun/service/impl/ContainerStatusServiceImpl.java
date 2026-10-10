@@ -79,7 +79,6 @@ public class ContainerStatusServiceImpl implements ContainerStatusService {
         containerStatusMapper.insert(e);
     }
 
-    @OpLog(module = "集装箱状态", table = "container_status", type = OpType.UPDATE, desc = "修改集装箱状态")
     @Override
     @Transactional
     public void update(Long id, ContainerStatusReq req) {
@@ -100,7 +99,6 @@ public class ContainerStatusServiceImpl implements ContainerStatusService {
         containerStatusMapper.update(null, u);
     }
 
-    @OpLog(module = "集装箱状态", table = "container_status", type = OpType.DELETE, desc = "删除集装箱状态")
     @Override
     @Transactional
     public void delete(Long id) {

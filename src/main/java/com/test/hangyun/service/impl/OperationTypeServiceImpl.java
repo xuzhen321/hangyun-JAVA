@@ -10,7 +10,6 @@ import com.test.hangyun.dto.OperationTypeQueryReq;
 import com.test.hangyun.dto.OperationTypeReq;
 import com.test.hangyun.dto.vo.OperationTypeOptionVO;
 import com.test.hangyun.dto.vo.OperationTypeVO;
-import com.test.hangyun.log.OpLog;
 import com.test.hangyun.mapper.OperationTypeMapper;
 import com.test.hangyun.pojo.entity.OperationType;
 import com.test.hangyun.pojo.enums.OpType;
@@ -70,7 +69,6 @@ public class OperationTypeServiceImpl implements OperationTypeService {
     }
 
     @Override
-    @OpLog(module = "操作类型字典", table = "operation_type", type = OpType.UPDATE, desc = "修改操作类型")
     @Transactional
     public void update(Long id, OperationTypeReq req) {
         getExisting(id);

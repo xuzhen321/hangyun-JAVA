@@ -139,7 +139,6 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @OpLog(module = "客户管理", table = "customer", type = OpType.UPDATE, desc = "修改客户")
     @Transactional
     public void update(Long id, CustomerUpdateReq req) {
         if (customerViewMapper.selectById(id) == null) {
@@ -163,7 +162,6 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @OpLog(module = "客户管理", table = "customer", type = OpType.DELETE, desc = "批量删除客户")
     @Transactional
     public void deleteBatch(List<Long> ids) {
         // 去重: 前端多选时可能因为交互传进重复的 id, 去重后 IN 里少几个参数
@@ -183,7 +181,6 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @OpLog(module = "客户管理", table = "customer", type = OpType.DELETE, desc = "删除客户")
     @Transactional
     public void delete(Long id) {
         if (customerViewMapper.selectById(id) == null) {

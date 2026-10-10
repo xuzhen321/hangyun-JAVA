@@ -61,7 +61,6 @@ public class PortLevelServiceImpl implements PortLevelService {
         portLevelMapper.insert(e);
     }
 
-    @OpLog(module = "港口级别", table = "port_level", type = OpType.UPDATE, desc = "修改港口级别")
     @Override
     @Transactional
     public void update(Long id, PortLevelReq req) {
@@ -72,7 +71,6 @@ public class PortLevelServiceImpl implements PortLevelService {
         portLevelMapper.update(null, u);
     }
 
-    @OpLog(module = "港口级别", table = "port_level", type = OpType.DELETE, desc = "删除港口级别")
     @Override
     @Transactional
     public void delete(Long id) {
